@@ -1,0 +1,5 @@
+torch
+torchvision
+gymnasium[atari]
+ale-py
+numpy
