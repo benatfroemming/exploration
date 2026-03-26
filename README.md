@@ -1,159 +1,137 @@
-# Exploration in RL
+# DQN Exploration Method Comparison
 
-Modular Deep Q-Network implementation based on  
-[Mnih et al. (2015) — *Human-level control through deep reinforcement learning*](https://www.nature.com/articles/nature14236).
+Modular DQN training suite for comparing exploration strategies on ALE/Breakout.  
+The DQN architecture, replay buffer, and training loop are **fixed** across all methods —
+only the action-selection logic changes.
 
 ---
 
-## Repository structure
+## Project layout
 
 ```
-.
-├── dqn_base_model.py   # DQN network, replay buffer, frame preprocessing, Agent class
-├── exploration.py      # Pluggable exploration strategies (greedy, epsilon_greedy)
-├── train.py            # Training script  — 5 000 episodes, configurable exploration
-├── eval.py             # Evaluation script — single greedy episode + video recording
-├── results.ipynb       # Jupyter notebook: plots & performance table
-│
-├── training_logs/      # Per-run JSONL logs  (auto-created)
-│   └── <exploration>_<run>.jsonl
-├── policies/           # Saved policy checkpoints  (auto-created)
-│   ├── <exploration>_<run>_best.pth
-│   └── <exploration>_<run>_final.pth
-└── runs/               # Evaluation videos  (auto-created)
-    └── <exploration>_<run>/
+dqn/
+├── core.py                  # DQN network, FrameStack, ReplayBuffer,
+│                            # HyperParams, preprocess_frame, logging utils
+├── agent.py                 # Agent class — fixed training loop,
+│                            # receives action_fn at runtime
+├── methods/
+│   ├── greedy.py            # Pure greedy (argmax Q, no randomness)
+│   └── epsilon_greedy.py    # Linear ε-decay (matches original notebook)
+└── train.py                 # CLI entrypoint
 ```
 
 ---
 
-## Installation
+## Quick start
 
 ```bash
-pip install torch torchvision gymnasium[atari] ale-py
-# Optional but recommended for GPU:
-# pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+# Epsilon-greedy — 5000 episodes (original notebook behaviour)
+python train.py --method epsilon_greedy --episodes 5000
+
+# Pure greedy baseline
+python train.py --method greedy --episodes 5000
+
+# Custom experiment name + output directory
+python train.py --method epsilon_greedy --episodes 5000 \
+    --experiment eg_seed42 --output-dir results/eg_seed42
+
+# Resume from checkpoint
+python train.py --method epsilon_greedy --episodes 5000 \
+    --checkpoint runs/epsilon_greedy_5000ep/qnetwork_epsilon_greedy_5000ep_best.pth
+
+# Override epsilon schedule
+python train.py --method epsilon_greedy --episodes 5000 \
+    --epsilon-start 1.0 --epsilon-end 0.05 --epsilon-decay-steps 500000
+
+# Force CPU / specific GPU
+python train.py --method epsilon_greedy --episodes 5000 --device cpu
+python train.py --method epsilon_greedy --episodes 5000 --device cuda:1
+
+# Full help
+python train.py --help
+python train.py --method epsilon_greedy --help
 ```
 
 ---
 
-## Training
+## Outputs
 
-```bash
-# Default: greedy exploration on Breakout, run 1
-python train.py
+All outputs land in `--output-dir` (default: `runs/<experiment>/`):
 
-# Epsilon-greedy exploration
-python train.py --exploration epsilon_greedy
+| File | Contents |
+|---|---|
+| `training_stats.jsonl` | JSON line written every 1000 episodes and at the end. Fields: `rewards`, `episode_length`, `sample_rewards` |
+| `qnetwork_<experiment>_best.pth` | Checkpoint of the best avg-100 model |
+| `<experiment>_training.log` | Full timestamped log |
 
-# Different environment, run index 2
-python train.py --exploration epsilon_greedy --env ALE/Pong-v5 --run 2
-
-# Override the random seed
-python train.py --exploration greedy --seed 0
-```
-
-**Arguments**
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--exploration` | `greedy` | Exploration strategy: `greedy` or `epsilon_greedy` |
-| `--env` | `ALE/Breakout-v5` | Any ALE Gymnasium environment id |
-| `--run` | `1` | Integer label appended to log / policy file names |
-| `--seed` | `42` | Random seed (overrides `HyperParams.SEED`) |
-
-Training always runs for **exactly 5 000 episodes**.  
-Logs are flushed to `training_logs/<exploration>_<run>.jsonl` every 500 episodes.  
-The best-performing policy (by 100-episode average) is saved to `policies/` automatically.
-
----
-
-## Evaluation
-
-Loads a saved policy, runs one greedy episode, and saves an MP4 to `runs/`.
-
-```bash
-# Evaluate a previously trained policy
-python eval.py --policy policies/epsilon_greedy_1_best.pth
-
-# With explicit labels (used for the output folder name only)
-python eval.py --policy policies/epsilon_greedy_2_best.pth \
-               --exploration epsilon_greedy --env ALE/Breakout-v5 --run 2
-```
-
-**Arguments**
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--policy` | *(required)* | Path to a `.pth` policy file |
-| `--exploration` | `greedy` | Label for the output video folder |
-| `--env` | `ALE/Breakout-v5` | Environment to evaluate on |
-| `--run` | `1` | Run index for the output folder name |
-
-The video is saved to `runs/<exploration>_<run>/`.
-
----
-
-## Results notebook
-
-Open `results.ipynb` with Jupyter (or VS Code) after training to generate:
-
-- **Reward vs Episode** — raw + 100-episode rolling mean
-- **Reward vs Environment Samples** — sample-efficiency curve
-- **Episode Length vs Episode**
-- **Epsilon Decay** schedule
-- **Max vs Average reward** per 100-episode block
-- **Performance summary table** (mean, max, std of reward, AUC, sample efficiency, learning-onset episode)
-
-```bash
-jupyter notebook results.ipynb
-# or
-jupyter lab results.ipynb
-```
-
----
-
-## Adding a new exploration strategy
-
-1. Open `exploration.py`.
-2. Create a class that inherits `ExplorationStrategy` and implements `name` and `select_action`.
-3. Register it in `_REGISTRY`.
+### Loading stats for plotting
 
 ```python
-class BoltzmannExploration(ExplorationStrategy):
-    def __init__(self, temperature=1.0):
-        self.temperature = temperature
+import json, numpy as np, matplotlib.pyplot as plt
 
-    @property
-    def name(self):
-        return "boltzmann"
+with open("runs/epsilon_greedy_5000ep/training_stats.jsonl") as f:
+    data = json.loads(f.readlines()[-1])   # last (= final) snapshot
 
-    def select_action(self, q_network, state_tensor):
-        with torch.no_grad():
-            q = q_network(state_tensor).squeeze(0)
-        probs = torch.softmax(q / self.temperature, dim=0).cpu().numpy()
-        return int(np.random.choice(len(probs), p=probs))
+rewards        = data["rewards"]
+episode_length = data["episode_length"]
+sample_rewards = data["sample_rewards"]   # one per env step
 
-_REGISTRY["boltzmann"] = BoltzmannExploration
-```
+# Avg-100 smoothing
+avg100 = [np.mean(rewards[max(0,i-100):i]) for i in range(1, len(rewards)+1)]
 
-Then run:
-```bash
-python train.py --exploration boltzmann
+plt.plot(avg100)
+plt.xlabel("Episode"); plt.ylabel("Avg-100 reward")
+plt.title("Epsilon-greedy — Breakout")
+plt.savefig("avg100_rewards.png")
 ```
 
 ---
 
-## Hyperparameters (fixed, see `dqn_base_model.py → HyperParams`)
+## Adding a new exploration method
 
-| Parameter | Value |
-|-----------|-------|
-| Replay buffer | 500 000 transitions |
-| Min buffer before training | 50 000 |
-| Batch size | 32 |
-| ε start / end / decay steps | 1.0 / 0.1 / 1 000 000 |
-| Target network sync | every 10 000 steps |
-| Learning rate | 1 × 10⁻⁴ (Adam) |
-| Discount γ | 0.99 |
-| Frame stack | 4 |
-| Network update frequency | every 4 env steps |
-| Max episode length | 20 000 steps |
+1. Create `methods/your_method.py` with these three symbols:
+
+```python
+def action_fn(agent, state_tensor) -> int:
+    ...
+
+def add_args(parser):
+    # add method-specific argparse arguments (or just pass)
+    ...
+
+def train(args, hyperparams, env, logger):
+    # build Agent, call agent.run(..., action_fn=...), return rewards, lengths, sample_rewards
+    ...
+```
+
+2. Register it in `train.py`:
+
+```python
+METHODS = {
+    "greedy":         "methods.greedy",
+    "epsilon_greedy": "methods.epsilon_greedy",
+    "your_method":    "methods.your_method",   # ← add this
+}
+```
+
+That's it — no other files need touching.
+
+---
+
+## Hyperparameter defaults
+
+| Parameter | Value | Notes |
+|---|---|---|
+| `BUFFER_SIZE` | 500 000 | |
+| `MIN_BUFFER_SIZE` | 50 000 | warm-up before training starts |
+| `BATCH_SIZE` | 32 | |
+| `EPSILON_START` | 1.0 | ε-greedy only |
+| `MIN_EPSILON` | 0.1 | ε-greedy only |
+| `EPSILON_DECAY_STEPS` | 1 000 000 | ε-greedy only |
+| `TARGET_UPDATE` | 10 000 steps | hard copy |
+| `LR` | 0.0001 | Adam |
+| `GAMMA` | 0.99 | |
+| `FRAME_STACK` | 4 | |
+| `MAX_EPISODE_LENGTH` | 20 000 | |
+| `UPDATE_FREQ` | 4 | gradient step every N env steps |
+| `SEED` | 42 | replay buffer seed |
