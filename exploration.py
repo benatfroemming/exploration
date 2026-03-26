@@ -1,9 +1,4 @@
 # exploration.py
-# Exploration strategies for DQN.
-#
-# Train loop contract (all train.py needs to know):
-#   action = strategy.act(q_network, state_tensor)   — select an action
-#   strategy.update()                                — update internal state after each env step
 
 import random
 from abc import ABC, abstractmethod
@@ -21,7 +16,7 @@ class ExplorationStrategy(ABC):
 
     @abstractmethod
     def update(self):
-        """Called once per env step. Update any internal state (e.g. decay epsilon)."""
+        """Called once per env step (only after buffer is full). Decay internal state."""
         ...
 
 
@@ -30,7 +25,7 @@ class ExplorationStrategy(ABC):
 # ---------------------------------------------------------------------------
 
 class Greedy(ExplorationStrategy):
-    """Always selects argmax Q(s, a). No exploration."""
+    """Always selects argmax Q(s, a). No exploration — useful for evaluation only."""
 
     def act(self, q_network, state_tensor) -> int:
         with torch.no_grad():
@@ -46,13 +41,14 @@ class Greedy(ExplorationStrategy):
 
 class EpsilonGreedy(ExplorationStrategy):
     """
-    Linearly decays epsilon from epsilon_start to epsilon_min over decay_steps.
-    With probability epsilon: random action. Otherwise: argmax Q(s, a).
+    Linearly decays epsilon from 1.0 -> 0.1 over 1M env steps.
+    update() is called only after the replay buffer is full, so the
+    decay schedule starts exactly when real training begins.
     """
 
-    EPSILON_START  = 1.0
-    EPSILON_MIN    = 0.1
-    DECAY_STEPS    = 1_000_000
+    EPSILON_START = 1.0
+    EPSILON_MIN   = 0.1
+    DECAY_STEPS   = 1_000_000
 
     def __init__(self, action_space_size: int):
         self.action_space_size = action_space_size

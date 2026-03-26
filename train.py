@@ -17,7 +17,8 @@ from exploration import available_strategies, make_strategy
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--exploration", default="greedy", choices=available_strategies())
+    p.add_argument("--exploration", default="epsilon_greedy",
+                   choices=available_strategies())
     p.add_argument("--env",  default="ALE/Breakout-v5")
     p.add_argument("--run",  type=int, default=1)
     return p.parse_args()
@@ -29,13 +30,15 @@ def to_tensor(stack, device):
 
 def gradient_update(q_net, target_net, replay_buffer, optimizer, loss_fn, hp, device):
     states, actions, rewards, next_states, dones = zip(*replay_buffer.sample(hp.BATCH_SIZE))
+
     states      = torch.stack(states).float().div(255.0).to(device)
     next_states = torch.stack(next_states).float().div(255.0).to(device)
     actions     = torch.tensor(actions).long().unsqueeze(1).to(device)
     rewards     = torch.tensor(rewards, dtype=torch.float32).unsqueeze(1).to(device)
     dones       = torch.tensor(dones,   dtype=torch.float32).unsqueeze(1).to(device)
 
-    q_val  = q_net(states).gather(1, actions)
+    q_val = q_net(states).gather(1, actions)
+
     with torch.no_grad():
         next_q  = target_net(next_states).max(1)[0].unsqueeze(1)
         target  = rewards + hp.GAMMA * next_q * (1.0 - dones)
@@ -47,8 +50,8 @@ def gradient_update(q_net, target_net, replay_buffer, optimizer, loss_fn, hp, de
 
 
 def main():
-    args   = parse_args()
-    hp     = HyperParams()
+    args    = parse_args()
+    hp      = HyperParams()
     run_tag = f"{args.exploration}_{args.run}"
 
     os.makedirs("training_logs", exist_ok=True)
@@ -94,13 +97,19 @@ def main():
         curr_life = info.get("lives", 5)
 
         while ep_len <= hp.MAX_EPISODE_LENGTH:
+
+            # Fire to launch ball at episode start or after losing a life
             if life_lost or ep_len == 0:
                 obs, _, _, _, info = env.step(1)
                 frame_stack.append(preprocess_frame(obs))
                 life_lost = False
 
-            state_tensor = to_tensor(frame_stack.get(), device)
+            # Capture state BEFORE the env step
+            current_state = frame_stack.get()
 
+            state_tensor = to_tensor(current_state, device)
+
+            # Fill buffer with random actions, otherwise use strategy
             if len(replay_buffer) < hp.MIN_BUFFER_SIZE:
                 action = env.action_space.sample()
                 if total_steps % 10_000 == 0:
@@ -112,17 +121,24 @@ def main():
             total_steps += 1
             ep_len      += 1
 
+            # DeepMind clips rewards to [-1, 1]
+            reward = np.clip(reward, -1.0, 1.0)
+
             if info.get("lives", curr_life) < curr_life:
                 life_lost = True
                 curr_life = info["lives"]
 
-            current_state = frame_stack.get()          # ← capture BEFORE appending next frame
+            # Append next frame AFTER capturing current_state
+            frame_stack.append(preprocess_frame(next_obs))
 
-            next_state = preprocess_frame(next_obs)
-            frame_stack.append(next_state)
+            replay_buffer.push((
+                current_state,          # s  — pre-step frame stack
+                action,
+                reward,
+                frame_stack.get(),      # s' — post-step frame stack
+                done or life_lost,      # terminal signal
+            ))
 
-            replay_buffer.push((current_state, action, reward,       # ← pre-step state
-                                frame_stack.get(), done or life_lost))  # ← post-step state
             ep_reward += reward
 
             if len(replay_buffer) >= hp.MIN_BUFFER_SIZE:
@@ -158,17 +174,17 @@ def main():
 
             with open(f"training_logs/{run_tag}.jsonl", "w") as f:
                 f.write(json.dumps({
-                    "rewards":           episode_rewards,
-                    "episode_lengths":   episode_lengths,
-                    "cumulative_steps":  cumulative_steps,
+                    "rewards":          episode_rewards,
+                    "episode_lengths":  episode_lengths,
+                    "cumulative_steps": cumulative_steps,
                 }) + "\n")
 
     torch.save(q_net.state_dict(), f"policies/{run_tag}_final.pth")
     with open(f"training_logs/{run_tag}.jsonl", "w") as f:
         f.write(json.dumps({
-            "rewards":           episode_rewards,
-            "episode_lengths":   episode_lengths,
-            "cumulative_steps":  cumulative_steps,
+            "rewards":          episode_rewards,
+            "episode_lengths":  episode_lengths,
+            "cumulative_steps": cumulative_steps,
         }) + "\n")
 
     print(f"Done in {(time.time()-start)/60:.0f}min")
