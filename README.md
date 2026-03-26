@@ -1,4 +1,4 @@
-# DQN — Atari Breakout (and other ALE environments)
+# Exploration in RL
 
 Modular Deep Q-Network implementation based on  
 [Mnih et al. (2015) — *Human-level control through deep reinforcement learning*](https://www.nature.com/articles/nature14236).

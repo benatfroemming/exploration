@@ -1,8 +1,4 @@
 #!/usr/bin/env python
-# train.py
-# Usage:
-#   python train.py
-#   python train.py --exploration epsilon_greedy --env ALE/Breakout-v5 --run 1
 
 import argparse
 import json
@@ -120,11 +116,13 @@ def main():
                 life_lost = True
                 curr_life = info["lives"]
 
+            current_state = frame_stack.get()          # ← capture BEFORE appending next frame
+
             next_state = preprocess_frame(next_obs)
             frame_stack.append(next_state)
 
-            replay_buffer.push((frame_stack.get(), action, reward,
-                                 frame_stack.get(), done or life_lost))
+            replay_buffer.push((current_state, action, reward,       # ← pre-step state
+                                frame_stack.get(), done or life_lost))  # ← post-step state
             ep_reward += reward
 
             if len(replay_buffer) >= hp.MIN_BUFFER_SIZE:
