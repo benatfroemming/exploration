@@ -12,7 +12,7 @@ A modular PyTorch implementation of DQN for Atari environments via the [Arcade L
 
 ## Training
 
-**Exploration strategies:** `epsilon_greedy`, `boltzmann`
+**Exploration strategies:** `epsilon_greedy`, `boltzmann`, `rnd`
 
 ```bash
 # Defaults: 5000 episodes, epsilon greedy, ALE/Breakout-v5

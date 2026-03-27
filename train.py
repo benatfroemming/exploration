@@ -15,6 +15,7 @@ from core import SharedHyperParams
 STRATEGIES: dict[str, str] = {
     "epsilon_greedy": "exploration.epsilon_greedy.EpsilonGreedyAgent",
     "boltzmann": "exploration.boltzmann.BoltzmannAgent",
+    "rnd": "exploration.rnd.RNDAgent",
     # add future strategies here:
 }
 
