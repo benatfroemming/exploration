@@ -41,7 +41,7 @@ STRATEGIES: dict[str, str] = {
 
 ## Experiments
 
-Experimental results can be found in this [Google Drive folder](https://drive.google.com/drive/folders/1qRDPAOwVGfdGju1yAcFSOH2zjnah2NZe?usp=sharing)
+Experimental results can be found in this [Google Drive folder](https://drive.google.com/drive/folders/1qRDPAOwVGfdGju1yAcFSOH2zjnah2NZe?usp=sharing).
 
 ## Fixed Hyperparameter
 

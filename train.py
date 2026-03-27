@@ -11,12 +11,11 @@ import torch
 import importlib
 from core import SharedHyperParams
 
-# ── registry of available exploration strategies ────────────────────────────
+# available exploration strategies
 STRATEGIES: dict[str, str] = {
     "epsilon_greedy": "exploration.epsilon_greedy.EpsilonGreedyAgent",
+    "boltzmann": "exploration.boltzmann.BoltzmannAgent",
     # add future strategies here:
-    # "ucb":          "exploration.ucb.UCBAgent",
-    # "noisy_net":    "exploration.noisy_net.NoisyNetAgent",
 }
 
 
@@ -82,7 +81,7 @@ def main() -> None:
     env = gym.make(args.env, render_mode="rgb_array")
     action_dim = env.action_space.n
 
-    # shared hyperparameters (replay buffer, LR, etc.)
+    # shared hyperparameters
     sys.path.insert(0, os.path.dirname(__file__))
     shared_hp = SharedHyperParams()
     shared_hp.NUM_EPISODES = args.episodes
@@ -93,10 +92,6 @@ def main() -> None:
     model_dir = run_dir
     print(f"Run dir : {run_dir}\n")
 
-    # agent + exploration-specific hyperparams
-    # Convention: each exploration module exposes both its Agent class and a
-    # HyperParams class. train.py imports both from the same module so no
-    # exploration logic leaks into this file.
     AgentClass = _import_agent(STRATEGIES[args.strategy])
     module_path = STRATEGIES[args.strategy].rsplit(".", 1)[0]
     ExploreHP = _import_agent(f"{module_path}.HyperParams")
