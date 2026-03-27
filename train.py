@@ -8,6 +8,9 @@ import ale_py
 import gymnasium as gym
 import torch
 
+import importlib
+from core import SharedHyperParams
+
 # ── registry of available exploration strategies ────────────────────────────
 STRATEGIES: dict[str, str] = {
     "epsilon_greedy": "exploration.epsilon_greedy.EpsilonGreedyAgent",
@@ -20,7 +23,6 @@ STRATEGIES: dict[str, str] = {
 def _import_agent(dotted_path: str):
     """Dynamically import an agent class from a dotted module path."""
     module_path, class_name = dotted_path.rsplit(".", 1)
-    import importlib
     module = importlib.import_module(module_path)
     return getattr(module, class_name)
 
@@ -82,7 +84,6 @@ def main() -> None:
 
     # shared hyperparameters (replay buffer, LR, etc.)
     sys.path.insert(0, os.path.dirname(__file__))
-    from core import SharedHyperParams
     shared_hp = SharedHyperParams()
     shared_hp.NUM_EPISODES = args.episodes
 

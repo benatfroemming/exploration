@@ -27,7 +27,7 @@ python train.py --checkpoint runs/.../dqn_ALE-Breakout-v5_epsilon_greedy_final.p
 
 ## Add a New Exploration Strategie
 
-1) Create `exploration/your_strategy.py` with a class that implements `train()`.
+1) Create `exploration/your_strategy.py` following the `exploration/template.py`.
 2) Register it in the STRATEGIES dict in `train.py`.
 3) Run with `--strategy your_strategy`.
 
@@ -38,6 +38,10 @@ STRATEGIES: dict[str, str] = {
     # add future strategies here:
 }
 ```
+
+## Experiments
+
+Experimental results can be found in this [Google Drive folder](https://drive.google.com/drive/folders/1qRDPAOwVGfdGju1yAcFSOH2zjnah2NZe?usp=sharing)
 
 ## Fixed Hyperparameter
 
