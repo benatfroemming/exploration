@@ -1,7 +1,6 @@
 # Exploration in Reinforcement Learning
 
-A modular PyTorch implementation of DQN for Atari, designed to make swapping
-exploration strategies easy. Based on [Mnih et al. (2015)](https://www.nature.com/articles/nature14236). The DQN parameters stay fixed to compare different exploration strategies.
+A modular PyTorch implementation of DQN for Atari environments via the [Arcade Learning Environment (ALE)](https://ale.farama.org/environments/), designed to make swapping exploration strategies easy. Based on [Mnih et al. (2015)](https://www.nature.com/articles/nature14236). The DQN parameters stay fixed to compare different exploration strategies.
 
 ## Setup
 
@@ -13,8 +12,10 @@ exploration strategies easy. Based on [Mnih et al. (2015)](https://www.nature.co
 
 ## Training
 
+**Exploration strategies:** `epsilon_greedy`, `boltzmann`
+
 ```bash
-# Defaults: 5000 episodes, epsilon-greedy, ALE/Breakout-v5
+# Defaults: 5000 episodes, epsilon greedy, ALE/Breakout-v5
 python train.py
 
 # Custom
@@ -22,6 +23,20 @@ python train.py --episodes 10000 --strategy boltzmann --env ALE/Breakout-v5
 
 # Resume from checkpoint
 python train.py --checkpoint runs/.../dqn_ALE-Breakout-v5_epsilon_greedy_final.pth
+```
+
+## Add a New Exploration Strategie
+
+1) Create `exploration/your_strategy.py` with a class that implements `train()`.
+2) Register it in the STRATEGIES dict in `train.py`.
+3) Run with `--strategy your_strategy`.
+
+```python
+# train.py
+STRATEGIES: dict[str, str] = {
+    "epsilon_greedy": "exploration.epsilon_greedy.EpsilonGreedyAgent",
+    # add future strategies here:
+}
 ```
 
 ## Fixed Hyperparameter
