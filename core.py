@@ -1,3 +1,4 @@
+# core.py
 import os
 import logging
 import random
@@ -90,41 +91,19 @@ class ReplayBuffer:
 
 # Hyperparameters
 class HyperParams:
-    """
-    Default hyperparameters matching the original notebook.
-    Override individual fields after instantiation as needed.
-    """
-
     def __init__(self):
-        # Replay buffer
-        self.BUFFER_SIZE = int(500_000)
-        self.MIN_BUFFER_SIZE = int(50_000)
-        self.BATCH_SIZE = 32
-
-        # Epsilon-greedy exploration (used only by epsilon_greedy method)
-        self.EPSILON_START = 1.0
-        self.EPSILON_DECAY_STEPS = 1_000_000
-        self.MIN_EPSILON = 0.1
-
-        # Target network
-        self.TARGET_UPDATE = 10_000     # hard copy every N env steps
-
-        # Optimiser
-        self.LR = 0.0001
-        self.GAMMA = 0.99
-
-        # Frame stacking
-        self.FRAME_STACK = 4
-        self.STATE_DIM = (self.FRAME_STACK, 84, 84)
-
-        # Training control
-        self.NUM_EPISODES = 5_000
-        self.MAX_TIMESTEPS = 8_000_000
+        self.BUFFER_SIZE     = 500_000
+        self.MIN_BUFFER_SIZE = 50_000
+        self.BATCH_SIZE      = 32
+        self.TARGET_UPDATE   = 10_000
+        self.LR              = 0.0001
+        self.GAMMA           = 0.99
+        self.FRAME_STACK     = 4
+        self.STATE_DIM       = (4, 84, 84)
+        self.NUM_EPISODES    = 5_000
         self.MAX_EPISODE_LENGTH = 20_000
-        self.UPDATE_FREQ = 4            # gradient update every N env steps
-
-        # Reproducibility
-        self.SEED = 42
+        self.UPDATE_FREQ     = 4
+        self.SEED            = 42
 
 # Logging
 def setup_logger(log_dir, log_name="training"):
