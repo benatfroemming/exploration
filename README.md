@@ -12,7 +12,15 @@ A modular PyTorch implementation of DQN for Atari environments via the [Arcade L
 
 ## Training
 
-**Exploration strategies:** `epsilon_greedy`, `boltzmann`, `rnd`, `ucb`, `thompson`
+**Exploration strategies:**
+
+- `greedy` — This is the baseline. Always picks the best action, no exploration.
+- `epsilon_greedy` — Takes a random action with probability ε, decaying over time.
+- `boltzmann` — Samples actions proportional to their Q-values via softmax with decaying temperature.
+- `ucb` — Adds an uncertainty bonus to the Q-values that favors under-visited actions.
+- `thompson` — Maintains an ensemble of Q-networks (bootstrapped heads) and samples one head per episode to explore.
+- `rnd` — Adds intrinsic curiosity rewards for novel states via a fixed random network.
+
 
 ```bash
 # Defaults: 5000 episodes, epsilon greedy, ALE/Breakout-v5
@@ -58,4 +66,4 @@ The components that don't change across exploration strategies, including the hy
 
 ## Experiments
 
-Results are in `results.ipynb` and the experimental data can be found in this [Google Drive folder](https://drive.google.com/drive/folders/1qRDPAOwVGfdGju1yAcFSOH2zjnah2NZe?usp=sharing).
+Results compared to a greedy baseline are in `results.ipynb` and the experimental data can be found in this Google Drive [folder](https://drive.google.com/drive/folders/1qRDPAOwVGfdGju1yAcFSOH2zjnah2NZe?usp=sharing).

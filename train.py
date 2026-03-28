@@ -13,6 +13,7 @@ from core import SharedHyperParams
 
 # available exploration strategies
 STRATEGIES: dict[str, str] = {
+    "greedy": "exploration.greedy.GreedyAgent", # baseline (no exploration)
     "epsilon_greedy": "exploration.epsilon_greedy.EpsilonGreedyAgent",
     "boltzmann": "exploration.boltzmann.BoltzmannAgent",
     "rnd": "exploration.rnd.RNDAgent",
