@@ -1,6 +1,6 @@
 # Exploration in Reinforcement Learning
 
-A modular PyTorch implementation of DQN for Atari environments via the [Arcade Learning Environment (ALE)](https://ale.farama.org/environments/), designed to make swapping exploration strategies easy. Based on Deep Mind's original implementation [Mnih et al. (2015)](https://www.nature.com/articles/nature14236). The DQN parameters stay fixed to compare different exploration strategies.
+A modular PyTorch implementation of DQN for Atari environments via the [Arcade Learning Environment (ALE)](https://ale.farama.org/environments/), designed to make swapping exploration strategies easy. Based on DeepMind's original implementation [Mnih et al. (2015)](https://www.nature.com/articles/nature14236). The DQN parameters stay fixed to compare different exploration strategies.
 
 ## Setup
 
