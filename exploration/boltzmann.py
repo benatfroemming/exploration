@@ -64,10 +64,11 @@ class BoltzmannAgent:
         self.total_grad_steps: int = 0
 
     def select_action(self, state_tensor: torch.Tensor) -> int:
-        """Sample action from softmax(Q / T) distribution."""
         with torch.no_grad():
             q_values = self.q_network(state_tensor).squeeze(0)  # (action_dim,)
-            probs = F.softmax(q_values / self.temperature, dim=-1)
+            q_values = q_values - q_values.max()                # stability trick
+            scaled = (q_values / self.temperature).clamp(-10, 10)
+            probs = F.softmax(scaled, dim=-1)
             return torch.multinomial(probs, num_samples=1).item()
 
     def _greedy_action(self, state_tensor: torch.Tensor) -> int:
@@ -158,10 +159,11 @@ class BoltzmannAgent:
                     state_stack = next_state_stack
                     continue
 
+                idx = min(self.total_env_steps, self.explore_hp.TEMP_DECAY_STEPS - 1)
+                self.temperature = float(self._temp_schedule[idx])
+
                 if self.total_env_steps % self.hp.UPDATE_FREQ == 0:
                     self._train_step()
-                    idx = min(self.total_env_steps, self.explore_hp.TEMP_DECAY_STEPS - 1)
-                    self.temperature = float(self._temp_schedule[idx])
 
                 if self.total_env_steps % self.hp.TARGET_UPDATE == 0:
                     self._sync_target()
