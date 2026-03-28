@@ -12,14 +12,14 @@ A modular PyTorch implementation of DQN for Atari environments via the [Arcade L
 
 ## Training
 
-**Exploration strategies:** `epsilon_greedy`, `boltzmann`, `rnd`
+**Exploration strategies:** `epsilon_greedy`, `boltzmann`, `rnd`, `ucb`, `thompson`
 
 ```bash
 # Defaults: 5000 episodes, epsilon greedy, ALE/Breakout-v5
 python train.py
 
 # Custom
-python train.py --episodes 10000 --strategy boltzmann --env ALE/Breakout-v5
+python train.py --episodes 10000 --strategy boltzmann --env ALE/Pong-v5
 
 # Resume from checkpoint
 python train.py --checkpoint runs/.../dqn_ALE-Breakout-v5_epsilon_greedy_final.pth
@@ -39,11 +39,9 @@ STRATEGIES: dict[str, str] = {
 }
 ```
 
-## Experiments
-
-Experimental results can be found in this [Google Drive folder](https://drive.google.com/drive/folders/1qRDPAOwVGfdGju1yAcFSOH2zjnah2NZe?usp=sharing).
-
 ## Fixed Hyperparameter
+
+The components that don't change across exploration strategies, including the hyperparameters, policy network, and image processing, are in `core.py`.
 
 | Parameter | Value | Description |
 |----------|------|-------------|
@@ -57,3 +55,7 @@ Experimental results can be found in this [Google Drive folder](https://drive.go
 | `MAX_EPISODE_LENGTH` | 20,000 | Maximum steps per episode |
 | `UPDATE_FREQ` | 4 | Perform a gradient step every N environment steps |
 | `SEED` | 42 | Random seed for reproducibility |
+
+## Experiments
+
+Results are in `results.ipynb` and the experimental data can be found in this [Google Drive folder](https://drive.google.com/drive/folders/1qRDPAOwVGfdGju1yAcFSOH2zjnah2NZe?usp=sharing).
