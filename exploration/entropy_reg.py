@@ -1,0 +1,266 @@
+# exploration/entropy_reg.py
+from __future__ import annotations
+
+import json
+import os
+import random
+from pathlib import Path
+
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+from core import DQN, FrameStack, SharedHyperParams, ReplayBuffer, preprocess_frame
+
+
+# Entropy regularization specific hyperparameters
+class HyperParams:
+
+    def __init__(self):
+        self.ALPHA_START = 0.1       # Initial entropy coefficient
+        self.ALPHA_MIN = 0.01        # Minimum entropy coefficient
+        self.ALPHA_DECAY_STEPS = 1_000_000  # Linear decay over this many env steps
+        self.EPSILON = 0.05          # Small fixed epsilon for minimum undirected exploration
+
+
+class EntropyRegAgent:
+    """
+    DQN agent with entropy regularization exploration.
+    """
+
+    STRATEGY_NAME = "entropy_reg"
+
+    def __init__(
+        self,
+        env_id: str,
+        shared_hp: SharedHyperParams,
+        explore_hp: HyperParams,
+        action_dim: int,
+        device: torch.device,
+        checkpoint: str | None = None,
+    ):
+        self.hp = shared_hp
+        self.explore_hp = explore_hp
+        self.env_id = env_id
+        self.action_dim = action_dim
+        self.device = device
+
+        # Alpha (entropy coefficient) schedule
+        self.alpha: float = self.explore_hp.ALPHA_START
+        self._alpha_schedule = np.linspace(
+            self.explore_hp.ALPHA_START,
+            self.explore_hp.ALPHA_MIN,
+            self.explore_hp.ALPHA_DECAY_STEPS,
+        )
+
+        # Networks
+        self.q_network = DQN(action_dim).to(device)
+        self.target_network = DQN(action_dim).to(device)
+        if checkpoint:
+            print(f"Loading checkpoint: {checkpoint}")
+            state = torch.load(checkpoint, map_location=device)
+            self.q_network.load_state_dict(state)
+            self.target_network.load_state_dict(state)
+        else:
+            self.target_network.load_state_dict(self.q_network.state_dict())
+
+        self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=self.hp.LR)
+        self.loss_fn = nn.HuberLoss()
+
+        self.replay_buffer = ReplayBuffer(self.hp.BUFFER_SIZE, self.hp.SEED)
+
+        # Global counters
+        self.total_env_steps: int = 0
+        self.total_grad_steps: int = 0
+
+    # Action selection
+    def select_action(self, state_tensor: torch.Tensor) -> int:
+        """
+        Greedy action selection with small fixed epsilon for minimum exploration.
+
+        Note: entropy regularization does its exploration work through the
+        training objective, not action selection. A small epsilon here just
+        prevents the policy from getting completely stuck early on.
+        """
+        if random.random() < self.explore_hp.EPSILON:
+            return random.randint(0, self.action_dim - 1)
+        return self._greedy_action(state_tensor)
+
+    def _greedy_action(self, state_tensor: torch.Tensor) -> int:
+        with torch.no_grad():
+            return self.q_network(state_tensor).argmax().item()
+
+    # Training step
+    def _train_step(self) -> None:
+        batch = self.replay_buffer.sample(self.hp.BATCH_SIZE)
+        states, actions, rewards, next_states, dones = zip(*batch)
+
+        states = torch.stack(states).float().div(255.0).to(self.device)
+        next_states = torch.stack(next_states).float().div(255.0).to(self.device)
+        actions = torch.tensor(actions).long().unsqueeze(1).to(self.device)
+        rewards = torch.tensor(rewards).float().unsqueeze(1).to(self.device)
+        dones = torch.tensor(dones).float().unsqueeze(1).to(self.device)
+
+        q_values = self.q_network(states).gather(1, actions)
+
+        with torch.no_grad():
+            next_q = self.target_network(next_states).max(1)[0].unsqueeze(1)
+            targets = rewards + self.hp.GAMMA * next_q * (1.0 - dones)
+
+        # Standard TD loss — identical to epsilon_greedy
+        td_loss = self.loss_fn(q_values, targets)
+
+        # Entropy bonus: H(pi(·|s)) = -sum(pi * log(pi))
+        # We compute pi via softmax over all Q-values for each state in the batch,
+        # then subtract the entropy from the loss (maximizing entropy = minimizing -H).
+        all_q = self.q_network(states)                          # (B, A)
+        pi = F.softmax(all_q, dim=-1)                           # (B, A)
+        log_pi = F.log_softmax(all_q, dim=-1)                   # (B, A)
+        entropy = -(pi * log_pi).sum(dim=-1).mean()             # scalar, >= 0
+
+        loss = td_loss - self.alpha * entropy  # subtract because we maximize entropy
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        self.total_grad_steps += 1
+
+    # Target network sync
+    def _sync_target(self) -> None:
+        self.target_network.load_state_dict(self.q_network.state_dict())
+
+    # Model persistence
+    def save(self, path: str) -> None:
+        torch.save(self.q_network.state_dict(), path)
+        print(f"  [save] {path}")
+
+    # Training loop
+    def train(self, env, num_episodes: int, log_path: str, model_dir: str) -> None:
+        """
+        Full training loop.
+
+        Args:
+            env:          A Gymnasium environment (already constructed).
+            num_episodes: Number of episodes to run.
+            log_path:     Path to the .jsonl log file.
+            model_dir:    Directory to save .pth checkpoints.
+        """
+        os.makedirs(model_dir, exist_ok=True)
+        frame_stack = FrameStack(self.hp.FRAME_STACK)
+
+        log_file = open(log_path, "w")
+
+        for episode in range(1, num_episodes + 1):
+            obs, info = env.reset()
+            state = preprocess_frame(obs)
+            frame_stack.reset()
+            for _ in range(self.hp.FRAME_STACK):
+                frame_stack.append(state)
+            state_stack = frame_stack.get_stack()
+
+            episode_reward = 0.0
+            ep_len = 0
+            curr_lives = info.get("lives", 5)
+            life_lost = False
+
+            while ep_len <= self.hp.MAX_EPISODE_LENGTH:
+                # Fire after a life loss or at the episode start
+                if life_lost or ep_len == 0:
+                    obs, _, _, _, info = env.step(1)
+                    preprocessed = preprocess_frame(obs)
+                    frame_stack.append(preprocessed)
+                    state_stack = frame_stack.get_stack()
+                    life_lost = False
+
+                state_tensor = (
+                    state_stack.clone()
+                    .detach()
+                    .float()
+                    .unsqueeze(0)
+                    .div(255.0)
+                    .to(self.device)
+                )
+                action = self.select_action(state_tensor)
+
+                next_obs, reward, done, truncated, info = env.step(action)
+
+                if info.get("lives", curr_lives) < curr_lives:
+                    life_lost = True
+                    curr_lives = info["lives"]
+
+                ep_len += 1
+                self.total_env_steps += 1
+                episode_reward += reward
+
+                next_state = preprocess_frame(next_obs)
+                frame_stack.append(next_state)
+                next_state_stack = frame_stack.get_stack()
+
+                # Replay buffer & training
+                self.replay_buffer.push(
+                    (state_stack, action, reward, next_state_stack, done or life_lost)
+                )
+
+                if len(self.replay_buffer) < self.hp.MIN_BUFFER_SIZE:
+                    if self.total_env_steps % 10_000 == 0:
+                        print(
+                            f"  Filling replay buffer … "
+                            f"{len(self.replay_buffer):,}/{self.hp.MIN_BUFFER_SIZE:,} steps"
+                        )
+                    state_stack = next_state_stack
+                    continue
+
+                if self.total_env_steps % self.hp.UPDATE_FREQ == 0:
+                    self._train_step()
+                    idx = min(self.total_env_steps, self.explore_hp.ALPHA_DECAY_STEPS - 1)
+                    self.alpha = float(self._alpha_schedule[idx])
+
+                if self.total_env_steps % self.hp.TARGET_UPDATE == 0:
+                    self._sync_target()
+                    print(
+                        f"  [target sync] step={self.total_env_steps:,}  "
+                        f"α={self.alpha:.4f}"
+                    )
+
+                state_stack = next_state_stack
+
+                if done or truncated:
+                    break
+
+            # Per-episode logging
+            record = {
+                "episode": episode,
+                "total_steps": self.total_env_steps,
+                "reward": episode_reward,
+                "ep_len": ep_len,
+                "alpha": round(self.alpha, 6),
+            }
+            log_file.write(json.dumps(record) + "\n")
+            log_file.flush()
+
+            if episode % 100 == 0:
+                print(
+                    f"[ep {episode:>5}] "
+                    f"steps={self.total_env_steps:>9,}  "
+                    f"reward={episode_reward:>6.1f}  "
+                    f"ep_len={ep_len:>6}  "
+                    f"α={self.alpha:.4f}"
+                )
+
+            if self.total_env_steps > 0 and self.total_env_steps % 2_000_000 == 0:
+                ckpt = os.path.join(
+                    model_dir,
+                    f"{self._model_stem()}_step{self.total_env_steps}.pth",
+                )
+                self.save(ckpt)
+
+        final_model = os.path.join(model_dir, f"{self._model_stem()}_final.pth")
+        self.save(final_model)
+        log_file.close()
+        print(f"\nTraining complete. Log → {log_path}  |  Model → {final_model}")
+
+    # Helpers
+    def _model_stem(self) -> str:
+        env_slug = self.env_id.replace("/", "-").replace(" ", "_")
+        return f"dqn_{env_slug}_{self.STRATEGY_NAME}"

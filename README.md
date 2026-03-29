@@ -17,6 +17,7 @@ A modular PyTorch implementation of DQN for Atari environments via the [Arcade L
 - `epsilon_greedy` — Takes a random action with probability ε, decaying over time.
 - `boltzmann` — Samples actions proportional to their Q-values via softmax with decaying temperature.
 - `ucb` — Adds an uncertainty bonus to the Q-values that favors under-visited actions.
+- `entropy_reg` — Adds a penalty to the training loss whenever the policy is too certain, rewarding uncertainty.
 - `thompson` — Maintains an ensemble of Q-networks (bootstrapped heads) and samples one head per episode to explore.
 - `rnd` — Adds intrinsic curiosity rewards for novel states via a fixed random network.
 
