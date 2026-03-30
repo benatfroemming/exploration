@@ -301,10 +301,5 @@ class EpsilonGreedyAgent:
             results["std"] = float(np.std(rewards))
             results["min"] = float(min(rewards))
             results["max"] = float(max(rewards))
-        
-        print(f"Total reward : {sum(rewards):.1f}")
-        if num_episodes > 1:
-            print(f"Average      : {float(np.mean(rewards)):.2f} ± {float(np.std(rewards)):.2f}")
-            print(f"Min / Max    : {min(rewards):.1f} / {max(rewards):.1f}")
 
         return results

@@ -74,8 +74,13 @@ def main() -> None:
         checkpoint=args.policy,  # loads weights in __init__
     )
 
-    agent.evaluate(env=env, num_episodes=args.episodes)
+    results = agent.evaluate(env=env, num_episodes=args.episodes)
     env.close()
+    
+    print(f"Total reward : {results['total_reward']:.1f}")
+    if args.episodes > 1:
+        print(f"Average      : {results['mean']:.2f} ± {results['std']:.2f}")
+        print(f"Min / Max    : {results['min']:.1f} / {results['max']:.1f}")
 
 
 if __name__ == "__main__":
