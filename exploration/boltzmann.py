@@ -209,8 +209,6 @@ class BoltzmannAgent:
         return f"dqn_{env_slug}_{self.STRATEGY_NAME}"
     
     def evaluate(self, env, num_episodes: int = 1) -> None:
-        """Run greedy evaluation episodes (no exploration). Prints total reward per episode,
-        and average ± std if more than one episode."""
         frame_stack = FrameStack(self.hp.FRAME_STACK)
         rewards: list[float] = []
 
@@ -221,6 +219,10 @@ class BoltzmannAgent:
             frame = preprocess_frame(obs)
             for _ in range(frame_stack.k):
                 frame_stack.append(frame)
+
+            # Fire to launch the ball at episode start
+            obs, _, _, _, _ = env.step(1)
+            frame_stack.append(preprocess_frame(obs))
 
             total_reward = 0.0
             for _ in range(self.hp.MAX_EPISODE_LENGTH):

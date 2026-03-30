@@ -479,12 +479,21 @@ class BoltzmannAgent:
             for _ in range(frame_stack.k):
                 frame_stack.append(frame)
 
+            # Fire to launch the ball at episode start
+            try:
+                obs, _, terminated, truncated, _ = env.step(1)
+                if not (terminated or truncated):
+                    frame_stack.append(preprocess_frame(obs))
+            except Exception:
+                # Safe fallback if env doesn't support this action
+                pass
+
             total_reward = 0.0
             for _ in range(self.hp.MAX_EPISODE_LENGTH):
                 state = frame_stack.get_stack().unsqueeze(0).float().div(255.0).to(self.device)
                 with torch.no_grad():
-                    q_heads = self.q_network(state)          # [1, K, A]
-                    action = q_heads.mean(dim=1).argmax(dim=1).item()  # average heads, then greedy
+                    q_heads = self.q_network(state)  # [1, K, A]
+                    action = q_heads.mean(dim=1).argmax(dim=1).item()
 
                 obs, reward, terminated, truncated, _ = env.step(action)
                 total_reward += reward
