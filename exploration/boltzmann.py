@@ -207,3 +207,39 @@ class BoltzmannAgent:
     def _model_stem(self) -> str:
         env_slug = self.env_id.replace("/", "-").replace(" ", "_")
         return f"dqn_{env_slug}_{self.STRATEGY_NAME}"
+    
+    def evaluate(self, env, num_episodes: int = 1) -> None:
+        """Run greedy evaluation episodes (no exploration). Prints total reward per episode,
+        and average ± std if more than one episode."""
+        frame_stack = FrameStack(self.hp.FRAME_STACK)
+        rewards: list[float] = []
+
+        self.q_network.eval()
+        for ep in range(1, num_episodes + 1):
+            obs, _ = env.reset()
+            frame_stack.reset()
+            frame = preprocess_frame(obs)
+            for _ in range(frame_stack.k):
+                frame_stack.append(frame)
+
+            total_reward = 0.0
+            for _ in range(self.hp.MAX_EPISODE_LENGTH):
+                state = frame_stack.get_stack().unsqueeze(0).float().div(255.0).to(self.device)
+                with torch.no_grad():
+                    action = self.q_network(state).argmax(dim=1).item()
+
+                obs, reward, terminated, truncated, _ = env.step(action)
+                total_reward += reward
+                frame_stack.append(preprocess_frame(obs))
+
+                if terminated or truncated:
+                    break
+
+            rewards.append(total_reward)
+            print(f"Episode {ep:>4d} | Total reward: {total_reward:.1f}")
+
+        print(f"\n{'─' * 35}")
+        print(f"Total reward : {sum(rewards):.1f}")
+        if num_episodes > 1:
+            print(f"Average      : {np.mean(rewards):.2f} ± {np.std(rewards):.2f}")
+            print(f"Min / Max    : {min(rewards):.1f} / {max(rewards):.1f}")

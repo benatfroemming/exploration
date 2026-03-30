@@ -35,29 +35,30 @@ python train.py --checkpoint runs/.../dqn_ALE-Breakout-v5_epsilon_greedy_final.p
 ## Evaluation
 
 Runs a saved policy greedily for one or more episodes and reports the total reward.
-
 ```bash
+# Required: --policy, --strategy
+# Defaults: 1 episode, ALE/Breakout-v5, not rendered
+
 # Single episode
-python eval.py --policy runs/.../model.pth
+python eval.py --policy runs/.../model.pth --strategy epsilon_greedy
 
 # Multiple episodes (also reports mean ± std and min/max)
-python eval.py --policy runs/.../model.pth --episodes 10
+python eval.py --policy runs/.../model.pth --strategy boltzmann --episodes 10
 
 # Different environment
-python eval.py --policy runs/.../model.pth --env ALE/Pong-v5 --episodes 5
+python eval.py --policy runs/.../model.pth --strategy rnd --env ALE/Pong-v5 --episodes 5
 
 # Render to screen
-python eval.py --policy runs/.../model.pth --render
+python eval.py --policy runs/.../model.pth --strategy thompson --render
 ```
 
 ## Add a New Exploration Strategie
 
 1) Create `exploration/your_strategy.py` following the `exploration/template.py`.
-2) Register it in the STRATEGIES dict in `train.py`.
+2) Register it in the STRATEGIES dict in `train.py` and `eval.py`.
 3) Run with `--strategy your_strategy`.
 
 ```python
-# train.py
 STRATEGIES: dict[str, str] = {
     "epsilon_greedy": "exploration.epsilon_greedy.EpsilonGreedyAgent",
     # add future strategies here:
