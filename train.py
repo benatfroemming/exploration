@@ -18,6 +18,7 @@ STRATEGIES: dict[str, str] = {
     "entropy_reg": "exploration.entropy_reg.EntropyRegAgent",
     "thompson": "exploration.thompson.ThompsonAgent",
     "rnd": "exploration.rnd.RNDAgent",
+    "ucb": "exploration.ucb.UCBAgent",
     # add future strategies here:
 }
 
