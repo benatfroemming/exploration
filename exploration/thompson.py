@@ -258,7 +258,7 @@ class ThompsonAgent:
         log_file.close()
         print(f"Training complete. Log saved to: {log_path}")
     
-    def evaluate(self, env, num_episodes: int = 1) -> None:
+    def evaluate(self, env, num_episodes: int = 1) -> dict:
         frame_stack = FrameStack(self.hp.FRAME_STACK)
         rewards: list[float] = []
 
@@ -270,13 +270,11 @@ class ThompsonAgent:
             for _ in range(frame_stack.k):
                 frame_stack.append(frame)
 
-            # Fire to launch the ball at episode start
             try:
                 obs, _, terminated, truncated, _ = env.step(1)
                 if not (terminated or truncated):
                     frame_stack.append(preprocess_frame(obs))
             except Exception:
-                # Safe fallback if env doesn't support this action
                 pass
 
             total_reward = 0.0
@@ -294,10 +292,23 @@ class ThompsonAgent:
                     break
 
             rewards.append(total_reward)
-            print(f"Episode {ep:>4d} | Total reward: {total_reward:.1f}")
 
-        print(f"\n{'─' * 35}")
+        results = {
+            "episodes": [
+                {"episode": ep, "total_reward": r}
+                for ep, r in enumerate(rewards, start=1)
+            ],
+            "total_reward": sum(rewards),
+        }
+        if num_episodes > 1:
+            results["mean"] = float(np.mean(rewards))
+            results["std"] = float(np.std(rewards))
+            results["min"] = float(min(rewards))
+            results["max"] = float(max(rewards))
+            
         print(f"Total reward : {sum(rewards):.1f}")
         if num_episodes > 1:
-            print(f"Average      : {np.mean(rewards):.2f} ± {np.std(rewards):.2f}")
+            print(f"Average      : {float(np.mean(rewards)):.2f} ± {float(np.std(rewards)):.2f}")
             print(f"Min / Max    : {min(rewards):.1f} / {max(rewards):.1f}")
+
+        return results

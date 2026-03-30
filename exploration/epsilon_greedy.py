@@ -259,7 +259,7 @@ class EpsilonGreedyAgent:
         env_slug = self.env_id.replace("/", "-").replace(" ", "_")
         return f"dqn_{env_slug}_{self.STRATEGY_NAME}"
     
-    def evaluate(self, env, num_episodes: int = 1) -> None:
+    def evaluate(self, env, num_episodes: int = 1) -> dict:
         frame_stack = FrameStack(self.hp.FRAME_STACK)
         rewards: list[float] = []
 
@@ -271,7 +271,6 @@ class EpsilonGreedyAgent:
             for _ in range(frame_stack.k):
                 frame_stack.append(frame)
 
-            # Fire to launch the ball at episode start
             obs, _, _, _, _ = env.step(1)
             frame_stack.append(preprocess_frame(obs))
 
@@ -289,10 +288,23 @@ class EpsilonGreedyAgent:
                     break
 
             rewards.append(total_reward)
-            print(f"Episode {ep:>4d} | Total reward: {total_reward:.1f}")
 
-        print(f"\n{'─' * 35}")
+        results = {
+            "episodes": [
+                {"episode": ep, "total_reward": r}
+                for ep, r in enumerate(rewards, start=1)
+            ],
+            "total_reward": sum(rewards),
+        }
+        if num_episodes > 1:
+            results["mean"] = float(np.mean(rewards))
+            results["std"] = float(np.std(rewards))
+            results["min"] = float(min(rewards))
+            results["max"] = float(max(rewards))
+        
         print(f"Total reward : {sum(rewards):.1f}")
         if num_episodes > 1:
-            print(f"Average      : {np.mean(rewards):.2f} ± {np.std(rewards):.2f}")
+            print(f"Average      : {float(np.mean(rewards)):.2f} ± {float(np.std(rewards)):.2f}")
             print(f"Min / Max    : {min(rewards):.1f} / {max(rewards):.1f}")
+
+        return results
