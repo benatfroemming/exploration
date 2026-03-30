@@ -32,6 +32,24 @@ python train.py --episodes 10000 --strategy boltzmann --env ALE/Pong-v5
 python train.py --checkpoint runs/.../dqn_ALE-Breakout-v5_epsilon_greedy_final.pth
 ```
 
+## Evaluation
+
+Runs a saved policy greedily for one or more episodes and reports the total reward.
+
+```bash
+# Single episode
+python eval.py --policy runs/.../model.pth
+
+# Multiple episodes (also reports mean ± std and min/max)
+python eval.py --policy runs/.../model.pth --episodes 10
+
+# Different environment
+python eval.py --policy runs/.../model.pth --env ALE/Pong-v5 --episodes 5
+
+# Render to screen
+python eval.py --policy runs/.../model.pth --render
+```
+
 ## Add a New Exploration Strategie
 
 1) Create `exploration/your_strategy.py` following the `exploration/template.py`.
