@@ -86,7 +86,34 @@ class DQN(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.net(x)
+    
+# Bootstrapped DQN network, used by thompson and ucb
+class BootstrappedDQN(nn.Module):
+    def __init__(self, action_dim: int, num_heads: int):
+        super().__init__()
+        self.num_heads = num_heads
+        self.action_dim = action_dim
 
+        self.feature_extractor = nn.Sequential(
+            nn.Conv2d(4, 32, kernel_size=8, stride=4),
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2),
+            nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1),
+            nn.ReLU(),
+            nn.Flatten(),
+            nn.Linear(3136, 512),
+            nn.ReLU(),
+        )
+
+        self.heads = nn.ModuleList([
+            nn.Linear(512, action_dim) for _ in range(num_heads)
+        ])
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        z = self.feature_extractor(x)
+        q_list = [head(z) for head in self.heads]
+        return torch.stack(q_list, dim=1)   # [B, K, A]
 
 # Frame stack
 class FrameStack:

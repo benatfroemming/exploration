@@ -1,6 +1,7 @@
 # Exploration in Reinforcement Learning
 
-A modular PyTorch implementation of DQN for Atari environments via the [Arcade Learning Environment (ALE)](https://ale.farama.org/environments/), designed to make swapping exploration strategies easy. Based on DeepMind's original implementation [Mnih et al. (2015)](https://www.nature.com/articles/nature14236). The DQN parameters stay fixed to compare different exploration strategies.
+This project is a modular PyTorch implementation of Deep Q-Network (DQN) for Atari environments via the [Arcade Learning Environment (ALE)](https://ale.farama.org/environments/), a testbed designed to make swapping exploration strategies easy. Based on DeepMind's original implementation [Mnih et al. (2015)](https://www.nature.com/articles/nature14236). The DQN parameters stay fixed to compare different exploration strategies.
+
 
 ## Setup
 
@@ -16,8 +17,8 @@ pip install -r requirements.txt
 
 - `epsilon_greedy` — Takes a random action with probability ε, decaying over time.
 - `boltzmann` — Samples actions proportional to their Q-values via softmax with decaying temperature.
-- `ucb` — Adds an uncertainty bonus to the Q-values that favors under-visited actions.
 - `entropy_reg` — Adds a penalty to the training loss whenever the policy is too certain, rewarding uncertainty.
+- `ucb` — Adds an uncertainty bonus to the Q-values that favors under-visited actions.
 - `thompson` — Maintains an ensemble of Q-networks (bootstrapped heads) and samples one head per episode.
 - `rnd` — Adds intrinsic curiosity to the rewards for novel states via predicting a fixed random network's output.
 
@@ -35,6 +36,7 @@ python train.py --checkpoint runs/.../dqn_ALE-Breakout-v5_epsilon_greedy_final.p
 ## Evaluation
 
 Runs a saved policy greedily for one or more episodes and reports the total reward.
+
 ```bash
 # Required: --policy, --strategy
 # Defaults: 1 episode, ALE/Breakout-v5, not rendered
@@ -55,7 +57,7 @@ python eval.py --policy runs/.../model.pth --strategy thompson --render
 ## Add a New Exploration Strategie
 
 1) Create `exploration/your_strategy.py` following the `exploration/template.py`.
-2) Register it in the STRATEGIES dict in `train.py` and `eval.py`.
+2) Register it in the `STRATEGIES` dict in `train.py` and `eval.py`.
 3) Run with `--strategy your_strategy`.
 
 ```python
