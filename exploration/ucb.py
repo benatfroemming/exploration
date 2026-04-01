@@ -278,9 +278,12 @@ class UCBAgent:
                 {"episode": ep, "total_reward": r}
                 for ep, r in enumerate(rewards, start=1)
             ],
-            "total_reward": sum(rewards),
         }
-        if num_episodes > 1:
+        
+        if num_episodes == 1:
+            results["total_reward"] = rewards[0]
+        else:
+            results["total_reward"] = sum(rewards)
             results["mean"] = float(np.mean(rewards))
             results["std"] = float(np.std(rewards))
             results["min"] = float(min(rewards))

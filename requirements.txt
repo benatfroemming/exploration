@@ -3,3 +3,4 @@ torchvision
 gymnasium[atari]
 ale-py
 numpy
+imageio

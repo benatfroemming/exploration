@@ -67,7 +67,6 @@ def main() -> None:
     gym.register_envs(ale_py)
     env = gym.make(args.env, render_mode="human" if args.render else "rgb_array")
     action_dim = env.action_space.n
-    record = args.render and args.episodes == 1
 
     shared_hp = SharedHyperParams()
     AgentClass = _import_agent(STRATEGIES[args.strategy])
@@ -83,17 +82,17 @@ def main() -> None:
         checkpoint=args.policy,  # loads weights in __init__
     )
 
-    results = agent.evaluate(env=env, num_episodes=args.episodes, record=record)
+    results = agent.evaluate(env=env, num_episodes=args.episodes, record=args.render)
+
     env.close()
     
-    if record and "frames" in results:
+    if args.render and "frames" in results:
         _save_render(results["frames"], args.env)
     
     print(f"Total reward : {results['total_reward']:.1f}")
     if args.episodes > 1:
         print(f"Average      : {results['mean']:.2f} ± {results['std']:.2f}")
         print(f"Min / Max    : {results['min']:.1f} / {results['max']:.1f}")
-
 
 if __name__ == "__main__":
     sys.path.insert(0, os.path.dirname(__file__))
