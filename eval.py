@@ -86,8 +86,6 @@ def main() -> None:
 
     env.close()
     
-    print(args.render)
-    print(results['frames'])
     if args.render and "frames" in results:
         _save_render(results["frames"], args.env)
     
