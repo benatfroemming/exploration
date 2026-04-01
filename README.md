@@ -2,6 +2,9 @@
 
 This project is a modular PyTorch implementation of Deep Q-Network (DQN) for Atari environments via the [Arcade Learning Environment (ALE)](https://ale.farama.org/environments/), a testbed designed to make swapping exploration strategies easy. Based on DeepMind's original implementation [Mnih et al. (2015)](https://www.nature.com/articles/nature14236). The DQN parameters stay fixed to compare different exploration strategies.
 
+<div align="center">
+  <img src="./media/ALE_Breakout-v5_ep1.gif" alt="Alt Text">
+</div>
 
 ## Setup
 
