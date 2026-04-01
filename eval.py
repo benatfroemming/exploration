@@ -65,7 +65,7 @@ def main() -> None:
     print(f"Episodes : {args.episodes}\n")
 
     gym.register_envs(ale_py)
-    env = gym.make(args.env, render_mode="human" if args.render else "rgb_array")
+    env = gym.make(args.env, render_mode="rgb_array")
     action_dim = env.action_space.n
 
     shared_hp = SharedHyperParams()

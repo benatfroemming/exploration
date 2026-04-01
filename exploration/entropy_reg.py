@@ -293,7 +293,7 @@ class EntropyRegAgent:
 
                 state = frame_stack.get_stack().unsqueeze(0).float().div(255.0).to(self.device)
                 with torch.no_grad():
-                    action = self.q_network(state).argmax(dim=1).item()  # fix: flat [1, A] output, no mean(dim=1)
+                    action = self.q_network(state).argmax(dim=1).item()
 
                 obs, reward, terminated, truncated, _ = env.step(action)
                 total_reward += reward
@@ -314,7 +314,7 @@ class EntropyRegAgent:
         }
 
         if num_episodes == 1:
-            results["total_reward"] = rewards[0]  # fix: single episode → scalar, not sum
+            results["total_reward"] = rewards[0] 
         else:
             results["total_reward"] = sum(rewards)
             results["mean"] = float(np.mean(rewards))
