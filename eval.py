@@ -41,7 +41,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--episodes", type=int, default=1,
                         help="Number of evaluation episodes (default: 1).")
     parser.add_argument("--render", action="store_true",
-                        help="Render the environment during evaluation.")
+                        help="Render the environment in a window (local only, not Colab).")
+    parser.add_argument("--record", type=str, default=None,
+                        metavar="DIR",
+                        help="Record episodes as MP4 into this directory (works on Colab).")
     return parser.parse_args()
 
 
@@ -51,15 +54,34 @@ def main() -> None:
     if not os.path.isfile(args.policy):
         raise FileNotFoundError(f"Checkpoint not found: {args.policy}")
 
+    if args.render and args.record:
+        raise ValueError("--render and --record are mutually exclusive.")
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device   : {device}")
     print(f"Policy   : {args.policy}")
     print(f"Env      : {args.env}")
     print(f"Strategy : {args.strategy}")
-    print(f"Episodes : {args.episodes}\n")
+    print(f"Episodes : {args.episodes}")
+    if args.record:
+        print(f"Record   : {args.record}")
+    print()
 
     gym.register_envs(ale_py)
-    env = gym.make(args.env, render_mode="human" if args.render else "rgb_array")
+
+    render_mode = "human" if args.render else "rgb_array"
+    env = gym.make(args.env, render_mode=render_mode)
+
+    if args.record:
+        from gymnasium.wrappers import RecordVideo
+        os.makedirs(args.record, exist_ok=True)
+        env = RecordVideo(
+            env,
+            video_folder=args.record,
+            episode_trigger=lambda _: True,  # record every episode
+            name_prefix=f"{args.strategy}",
+        )
+
     action_dim = env.action_space.n
 
     shared_hp = SharedHyperParams()
@@ -73,17 +95,19 @@ def main() -> None:
         explore_hp=ExploreHP(),
         action_dim=action_dim,
         device=device,
-        checkpoint=args.policy,  # loads weights in __init__
+        checkpoint=args.policy,
     )
 
     results = agent.evaluate(env=env, num_episodes=args.episodes)
     env.close()
-    
+
     print(f"Total reward : {results['total_reward']:.1f}")
     if args.episodes > 1:
         print(f"Average      : {results['mean']:.2f} ± {results['std']:.2f}")
         print(f"Min / Max    : {results['min']:.1f} / {results['max']:.1f}")
 
+    if args.record:
+        print(f"\nVideos saved to: {args.record}/")
 
 if __name__ == "__main__":
     sys.path.insert(0, os.path.dirname(__file__))
