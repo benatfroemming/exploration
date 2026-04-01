@@ -229,9 +229,10 @@ class ThompsonAgent:
         log_file.close()
         print(f"Training complete. Log saved to: {log_path}")
     
-    def evaluate(self, env, num_episodes: int = 1) -> dict:
+    def evaluate(self, env, num_episodes: int = 1, record: bool = False) -> dict:
         frame_stack = FrameStack(self.hp.FRAME_STACK)
         rewards: list[float] = []
+        all_episodes_frames: list[list] = []
 
         self.q_network.eval()
         for ep in range(1, num_episodes + 1):
@@ -248,8 +249,12 @@ class ThompsonAgent:
             except Exception:
                 pass
 
+            ep_frames: list = []
             total_reward = 0.0
             for _ in range(self.hp.MAX_EPISODE_LENGTH):
+                if record:
+                    ep_frames.append(env.render())
+
                 state = frame_stack.get_stack().unsqueeze(0).float().div(255.0).to(self.device)
                 with torch.no_grad():
                     q_heads = self.q_network(state)  # [1, K, A]
@@ -263,6 +268,8 @@ class ThompsonAgent:
                     break
 
             rewards.append(total_reward)
+            if record:
+                all_episodes_frames.append(ep_frames)
 
         results = {
             "episodes": [
@@ -276,5 +283,8 @@ class ThompsonAgent:
             results["std"] = float(np.std(rewards))
             results["min"] = float(min(rewards))
             results["max"] = float(max(rewards))
-        
+
+        if all_episodes_frames:
+            results["frames"] = all_episodes_frames
+
         return results

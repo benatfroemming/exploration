@@ -277,9 +277,10 @@ class RNDAgent:
         env_slug = self.env_id.replace("/", "-").replace(" ", "_")
         return f"dqn_{env_slug}_{self.STRATEGY_NAME}"
     
-    def evaluate(self, env, num_episodes: int = 1) -> dict:
+    def evaluate(self, env, num_episodes: int = 1, record: bool = False) -> dict:
         frame_stack = FrameStack(self.hp.FRAME_STACK)
         rewards: list[float] = []
+        all_episodes_frames: list[list] = []
 
         self.q_network.eval()
         for ep in range(1, num_episodes + 1):
@@ -289,14 +290,23 @@ class RNDAgent:
             for _ in range(frame_stack.k):
                 frame_stack.append(frame)
 
-            obs, _, _, _, _ = env.step(1)
-            frame_stack.append(preprocess_frame(obs))
+            try:
+                obs, _, terminated, truncated, _ = env.step(1)
+                if not (terminated or truncated):
+                    frame_stack.append(preprocess_frame(obs))
+            except Exception:
+                pass
 
+            ep_frames: list = []
             total_reward = 0.0
             for _ in range(self.hp.MAX_EPISODE_LENGTH):
+                if record:
+                    ep_frames.append(env.render())
+
                 state = frame_stack.get_stack().unsqueeze(0).float().div(255.0).to(self.device)
                 with torch.no_grad():
-                    action = self.q_network(state).argmax(dim=1).item()
+                    q_heads = self.q_network(state)  # [1, K, A]
+                    action = q_heads.mean(dim=1).argmax(dim=1).item()
 
                 obs, reward, terminated, truncated, _ = env.step(action)
                 total_reward += reward
@@ -306,6 +316,8 @@ class RNDAgent:
                     break
 
             rewards.append(total_reward)
+            if record:
+                all_episodes_frames.append(ep_frames)
 
         results = {
             "episodes": [
@@ -319,5 +331,8 @@ class RNDAgent:
             results["std"] = float(np.std(rewards))
             results["min"] = float(min(rewards))
             results["max"] = float(max(rewards))
+
+        if all_episodes_frames:
+            results["frames"] = all_episodes_frames
 
         return results

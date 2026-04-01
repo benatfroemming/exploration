@@ -50,8 +50,11 @@ python eval.py --policy runs/.../model.pth --strategy boltzmann --episodes 10
 # Different environment
 python eval.py --policy runs/.../model.pth --strategy rnd --env ALE/Pong-v5 --episodes 5
 
-# Render to screen
+# Render flag saves one GIF per episode (e.g. ALE_Breakout-v5_ep1.gif)
 python eval.py --policy runs/.../model.pth --strategy thompson --render
+
+# Render multiple episodes
+python eval.py --policy runs/.../model.pth --strategy thompson --render --episodes 3
 ```
 
 ## Add a New Exploration Strategie

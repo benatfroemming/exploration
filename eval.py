@@ -7,6 +7,7 @@ import sys
 import ale_py
 import gymnasium as gym
 import torch
+import imageio
 
 from core import SharedHyperParams
 
@@ -20,12 +21,17 @@ STRATEGIES: dict[str, str] = {
     # add future strategies here
 }
 
-
 def _import_agent(dotted_path: str):
     module_path, class_name = dotted_path.rsplit(".", 1)
     module = importlib.import_module(module_path)
     return getattr(module, class_name)
 
+def _save_render(all_episodes_frames: list[list], env_id: str) -> None:
+    base = env_id.replace("/", "_")
+    for i, frames in enumerate(all_episodes_frames, start=1):
+        fname = f"{base}_ep{i}.gif"
+        imageio.mimsave(fname, frames, fps=30)
+        print(f"Saved render → {fname}")
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -41,10 +47,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--episodes", type=int, default=1,
                         help="Number of evaluation episodes (default: 1).")
     parser.add_argument("--render", action="store_true",
-                        help="Render the environment in a window (local only, not Colab).")
-    parser.add_argument("--record", type=str, default=None,
-                        metavar="DIR",
-                        help="Record episodes as MP4 into this directory (works on Colab).")
+                        help="Render the environment during evaluation.")
     return parser.parse_args()
 
 
@@ -54,35 +57,17 @@ def main() -> None:
     if not os.path.isfile(args.policy):
         raise FileNotFoundError(f"Checkpoint not found: {args.policy}")
 
-    if args.render and args.record:
-        raise ValueError("--render and --record are mutually exclusive.")
-
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device   : {device}")
     print(f"Policy   : {args.policy}")
     print(f"Env      : {args.env}")
     print(f"Strategy : {args.strategy}")
-    print(f"Episodes : {args.episodes}")
-    if args.record:
-        print(f"Record   : {args.record}")
-    print()
+    print(f"Episodes : {args.episodes}\n")
 
     gym.register_envs(ale_py)
-
-    render_mode = "human" if args.render else "rgb_array"
-    env = gym.make(args.env, render_mode=render_mode)
-
-    if args.record:
-        from gymnasium.wrappers import RecordVideo
-        os.makedirs(args.record, exist_ok=True)
-        env = RecordVideo(
-            env,
-            video_folder=args.record,
-            episode_trigger=lambda _: True,  # record every episode
-            name_prefix=f"{args.strategy}",
-        )
-
+    env = gym.make(args.env, render_mode="human" if args.render else "rgb_array")
     action_dim = env.action_space.n
+    record = args.render and args.episodes == 1
 
     shared_hp = SharedHyperParams()
     AgentClass = _import_agent(STRATEGIES[args.strategy])
@@ -95,19 +80,20 @@ def main() -> None:
         explore_hp=ExploreHP(),
         action_dim=action_dim,
         device=device,
-        checkpoint=args.policy,
+        checkpoint=args.policy,  # loads weights in __init__
     )
 
-    results = agent.evaluate(env=env, num_episodes=args.episodes)
+    results = agent.evaluate(env=env, num_episodes=args.episodes, record=record)
     env.close()
-
+    
+    if record and "frames" in results:
+        _save_render(results["frames"], args.env)
+    
     print(f"Total reward : {results['total_reward']:.1f}")
     if args.episodes > 1:
         print(f"Average      : {results['mean']:.2f} ± {results['std']:.2f}")
         print(f"Min / Max    : {results['min']:.1f} / {results['max']:.1f}")
 
-    if args.record:
-        print(f"\nVideos saved to: {args.record}/")
 
 if __name__ == "__main__":
     sys.path.insert(0, os.path.dirname(__file__))
