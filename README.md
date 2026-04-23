@@ -39,6 +39,8 @@ python train.py --checkpoint runs/.../dqn_ALE-Breakout-v5_epsilon_greedy_final.p
 python train.py --seed 84
 ```
 
+When the training ends, it will store the model as a `.pth` file and a per episode log as a `.jsonl` with the following properties: episode, total_steps, reward, ep_len, loss, regret, and entropy. 
+
 ## Evaluation
 
 Runs a saved policy greedily for one or more episodes and reports the total reward.

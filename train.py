@@ -122,7 +122,6 @@ def main() -> None:
         action_dim=action_dim,
         device=device,
         checkpoint=args.checkpoint,
-        seed=args.seed,
     )
 
     # train
