@@ -62,7 +62,7 @@ python eval.py --policy runs/.../model.pth --strategy rnd --env ALE/Pong-v5 --ep
 python eval.py --policy runs/.../model.pth --strategy thompson --render --episodes 3
 ```
 
-# Visualization
+## Visualization
 
 Automatically parse and compare training runs across strategies and seeds.
 

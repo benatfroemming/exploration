@@ -149,7 +149,6 @@ class EpsilonGreedyAgent:
             model_dir:    Directory to save .pth checkpoints.
         """
         os.makedirs(model_dir, exist_ok=True)
-        best_avg_reward = -float("inf")
         frame_stack = FrameStack(self.hp.FRAME_STACK)
 
         # Each line in the JSONL is one episode record
@@ -247,7 +246,7 @@ class EpsilonGreedyAgent:
                 "total_steps": self.total_env_steps,
                 "reward":      episode_reward,
                 "ep_len":      ep_len,
-                "temperature": round(self.temperature, 6),
+                "epsilon":     round(self.epsilon, 6),
                 "loss":        float(np.mean(ep_losses)) if ep_losses else None,
                 "regret":      float(np.mean(ep_regrets)) if ep_regrets else None,
                 "entropy":     float(np.mean(ep_entropies)) if ep_entropies else None,
