@@ -168,6 +168,7 @@ class EpsilonGreedyAgent:
             curr_lives = info.get("lives", 5)
             life_lost = False
 
+            ep_losses: list[float] = []
             ep_regrets: list[float] = []
             ep_entropies: list[float] = []
 
@@ -222,6 +223,7 @@ class EpsilonGreedyAgent:
 
                 if self.total_env_steps % self.hp.UPDATE_FREQ == 0:
                     metrics = self._train_step()
+                    ep_losses.append(metrics["loss"])
                     ep_regrets.append(metrics["regret"])
                     ep_entropies.append(metrics["entropy"])
                     idx = min(self.total_env_steps, self.explore_hp.EPSILON_DECAY_STEPS - 1)
@@ -246,6 +248,7 @@ class EpsilonGreedyAgent:
                 "reward": episode_reward,
                 "ep_len": ep_len,
                 "epsilon": round(self.epsilon, 6),
+                "loss": float(np.mean(ep_losses)) if ep_losses else None,
                 "regret": float(np.mean(ep_regrets)) if ep_regrets else None,
                 "entropy": float(np.mean(ep_entropies)) if ep_entropies else None,
             }
