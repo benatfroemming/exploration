@@ -60,7 +60,7 @@ class YourStrategyAgent:
         with torch.no_grad():
             return self.q_network(state_tensor).argmax().item()
 
-    def _train_step(self) -> None:
+    def _train_step(self) -> dict:
         batch = self.replay_buffer.sample(self.hp.BATCH_SIZE)
         states, actions, rewards, next_states, dones = zip(*batch)
 
@@ -80,6 +80,21 @@ class YourStrategyAgent:
         loss.backward()
         self.optimizer.step()
         self.total_grad_steps += 1
+
+        with torch.no_grad():
+            all_q = self.q_network(states)
+            q_max = all_q.max(dim=1, keepdim=True).values
+            q_taken = all_q.gather(1, actions)
+            regret = (q_max - q_taken).mean().item()
+            probs = torch.softmax(all_q, dim=1)
+            log_probs = torch.log(probs + 1e-8)
+            entropy = -(probs * log_probs).sum(dim=1).mean().item()
+
+        return {
+            "loss": loss.item(),
+            "regret": regret,
+            "entropy": entropy,
+        }
 
     def _sync_target(self) -> None:
         self.target_network.load_state_dict(self.q_network.state_dict())
@@ -105,6 +120,10 @@ class YourStrategyAgent:
             ep_len         = 0
             curr_lives     = info.get("lives", 5)
             life_lost      = False
+            
+            ep_losses: list[float] = []
+            ep_regrets: list[float] = []
+            ep_entropies: list[float] = []
 
             while ep_len <= self.hp.MAX_EPISODE_LENGTH:
                 if life_lost or ep_len == 0:
@@ -145,7 +164,10 @@ class YourStrategyAgent:
                     continue
 
                 if self.total_env_steps % self.hp.UPDATE_FREQ == 0:
-                    self._train_step()
+                    metrics = self._train_step()
+                    ep_losses.append(metrics["loss"])
+                    ep_regrets.append(metrics["regret"])
+                    ep_entropies.append(metrics["entropy"])
 
                 if self.total_env_steps % self.hp.TARGET_UPDATE == 0:
                     self._sync_target()
@@ -161,6 +183,9 @@ class YourStrategyAgent:
                 "total_steps": self.total_env_steps,
                 "reward":      episode_reward,
                 "ep_len":      ep_len,
+                "loss":        float(np.mean(ep_losses)) if ep_losses else None,
+                "regret":      float(np.mean(ep_regrets)) if ep_regrets else None,
+                "entropy":     float(np.mean(ep_entropies)) if ep_entropies else None,
             }
             log_file.write(json.dumps(record) + "\n")
             log_file.flush()
@@ -182,8 +207,7 @@ class YourStrategyAgent:
         print(f"\nTraining complete. Log → {log_path}  |  Model → {final_model}")
 
     def _model_stem(self) -> str:
-        env_slug = self.env_id.replace("/", "-").replace(" ", "_")
-        return f"dqn_{env_slug}_{self.STRATEGY_NAME}"
+        return f"{self.STRATEGY_NAME}_{self.hp.SEED}_{self.hp.NUM_EPISODES}"
     
     def evaluate(self, env, num_episodes: int = 1, record: bool = False) -> dict:
         frame_stack = FrameStack(self.hp.FRAME_STACK)

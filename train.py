@@ -24,21 +24,17 @@ STRATEGIES: dict[str, str] = {
     # add future strategies here:
 }
 
-
 def _import_agent(dotted_path: str):
     """Dynamically import an agent class from a dotted module path."""
     module_path, class_name = dotted_path.rsplit(".", 1)
     module = importlib.import_module(module_path)
     return getattr(module, class_name)
 
-
-def _make_run_dir(env_id: str, strategy: str) -> str:
+def _make_run_dir(env_id: str, strategy: str, seed: int) -> str:
     env_slug = env_id.replace("/", "-").replace(" ", "_")
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = os.path.join("runs", env_slug, strategy, timestamp)
+    run_dir = os.path.join("runs", env_slug, strategy)
     os.makedirs(run_dir, exist_ok=True)
     return run_dir
-
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -107,11 +103,12 @@ def main() -> None:
     shared_hp.SEED = args.seed
 
     # output paths
-    run_dir = _make_run_dir(args.env, args.strategy)
-    log_path = os.path.join(run_dir, "training_log.jsonl")
+    stem = f"{args.strategy}_{args.seed}_{args.episodes}"
+    run_dir = _make_run_dir(args.env, args.strategy, args.seed)
+    log_path = os.path.join(run_dir, f"{stem}.jsonl")
     model_dir = run_dir
     print(f"Run dir : {run_dir}\n")
-
+    
     AgentClass = _import_agent(STRATEGIES[args.strategy])
     module_path = STRATEGIES[args.strategy].rsplit(".", 1)[0]
     ExploreHP = _import_agent(f"{module_path}.HyperParams")

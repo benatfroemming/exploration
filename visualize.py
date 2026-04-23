@@ -1,397 +1,435 @@
 #!/usr/bin/env python3
 """
-visualize.py  --  DQN training log visualizer
+visualize.py — RL run log visualizer
+Usage: python visualize.py --dir <run_log_directory> [--output <output.html>]
 
-Usage:
-    python visualize.py --log path/to/run.jsonl
-    python visualize.py --log path/to/run.jsonl --out dashboard.html
-    python visualize.py --log path/to/run.jsonl --no-open   # don't auto-open browser
+Expects .jsonl files named like: {strategy}_{seed}_{episodes}.jsonl
+where strategy may itself contain underscores (e.g. epsilon_greedy).
 """
-
-from __future__ import annotations
 
 import argparse
 import json
-import math
 import os
-import webbrowser
+import re
+import sys
+from collections import defaultdict
 from pathlib import Path
 
 
-# ── helpers ──────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Parsing helpers
+# ---------------------------------------------------------------------------
 
-def load_log(path: str) -> tuple[list[dict], dict | None]:
-    """Return (episode_records, summary_record | None)."""
-    episodes, summary = [], None
-    with open(path) as f:
+def parse_stem(stem: str):
+    """
+    Extract (strategy, seed, episodes) from a stem like
+      epsilon_greedy_42_1000  or  ucb_0_500
+    The last two tokens are always seed (int) and episodes (int).
+    Everything before them is the strategy name.
+    """
+    parts = stem.split("_")
+    if len(parts) < 3:
+        return stem, None, None
+    try:
+        episodes = int(parts[-1])
+        seed = int(parts[-2])
+        strategy = "_".join(parts[:-2])
+        return strategy, seed, episodes
+    except ValueError:
+        return stem, None, None
+
+
+def load_jsonl(path: str):
+    records = []
+    with open(path, "r") as f:
         for line in f:
             line = line.strip()
             if not line:
                 continue
-            rec = json.loads(line)
-            if rec.get("episode") == "summary":
-                summary = rec
-            else:
-                episodes.append(rec)
-    return episodes, summary
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError:
+                pass
+    return records
 
 
-def rolling_mean(values: list[float], window: int) -> list[float]:
-    out = []
-    for i, v in enumerate(values):
-        start = max(0, i - window + 1)
-        out.append(sum(values[start : i + 1]) / (i - start + 1))
-    return out
+def collect_runs(directory: str):
+    """
+    Returns a dict keyed by (strategy, seed) → list of records,
+    plus metadata.
+    """
+    runs = {}
+    dir_path = Path(directory)
+    jsonl_files = sorted(dir_path.glob("*.jsonl"))
+
+    if not jsonl_files:
+        print(f"No .jsonl files found in {directory}", file=sys.stderr)
+        sys.exit(1)
+
+    for path in jsonl_files:
+        stem = path.stem
+        strategy, seed, episodes = parse_stem(stem)
+        records = load_jsonl(str(path))
+        key = (strategy, seed)
+        if key in runs:
+            runs[key].extend(records)
+        else:
+            runs[key] = records
+
+    return runs
 
 
-def safe(values: list, key: str) -> list[float]:
-    """Extract key from list of dicts, replacing None with NaN for JS."""
-    return [v.get(key) for v in values]
+# ---------------------------------------------------------------------------
+# Data extraction helpers
+# ---------------------------------------------------------------------------
+
+METRICS = [
+    ("reward",     "episode",     "Reward",          "Episode"),
+    ("reward",     "total_steps", "Reward",          "Total Steps"),
+    ("ep_len",     "episode",     "Episode Length",  "Episode"),
+    ("loss",       "episode",     "Loss",            "Episode"),
+    ("regret",     "episode",     "Regret",          "Episode"),
+    ("entropy",    "episode",     "Entropy",         "Episode"),
+]
 
 
-def to_js_array(values: list) -> str:
-    def fmt(v):
-        if v is None or (isinstance(v, float) and math.isnan(v)):
-            return "null"
-        return str(v)
-    return "[" + ",".join(fmt(v) for v in values) + "]"
+def extract_series(records, y_key, x_key):
+    xs, ys = [], []
+    for r in records:
+        x = r.get(x_key)
+        y = r.get(y_key)
+        if x is not None and y is not None:
+            xs.append(x)
+            ys.append(y)
+    return xs, ys
 
 
-# ── HTML generation ───────────────────────────────────────────────────────────
+def build_chart_data(runs):
+    """Build per-metric chart data structures for Plotly."""
+    charts = []
+    for y_key, x_key, y_label, x_label in METRICS:
+        traces = []
+        for (strategy, seed), records in runs.items():
+            xs, ys = extract_series(records, y_key, x_key)
+            if not xs:
+                continue
+            label = strategy if seed is None else f"{strategy} (seed={seed})"
+            traces.append({
+                "x": xs,
+                "y": ys,
+                "name": label,
+                "strategy": strategy,
+            })
+        if traces:
+            charts.append({
+                "y_key": y_key,
+                "x_key": x_key,
+                "y_label": y_label,
+                "x_label": x_label,
+                "traces": traces,
+            })
+    return charts
 
-HTML_TEMPLATE = r"""<!DOCTYPE html>
+
+# ---------------------------------------------------------------------------
+# HTML generation
+# ---------------------------------------------------------------------------
+
+PALETTE = [
+    "#2196f3", "#e91e63", "#4caf50", "#ff9800",
+    "#9c27b0", "#00bcd4", "#f44336", "#8bc34a",
+    "#ff5722", "#607d8b",
+]
+
+
+def generate_html(runs, charts, source_dir: str) -> str:
+    # Assign stable colors per strategy
+    strategies = sorted({s for (s, _) in runs.keys()})
+    color_map = {s: PALETTE[i % len(PALETTE)] for i, s in enumerate(strategies)}
+
+    # Serialise chart data as JS
+    js_charts = []
+    for c in charts:
+        js_traces = []
+        for t in c["traces"]:
+            color = color_map.get(t["strategy"], "#888")
+            js_traces.append({
+                "x": t["x"],
+                "y": t["y"],
+                "name": t["name"],
+                "type": "scatter",
+                "mode": "lines",
+                "line": {"color": color, "width": 1.8},
+                "hovertemplate": f"<b>{t['name']}</b><br>{c['x_label']}: %{{x}}<br>{c['y_label']}: %{{y:.4f}}<extra></extra>",
+            })
+        js_charts.append({
+            "id": f"chart_{c['y_key']}_{c['x_key']}",
+            "title": f"{c['y_label']} vs {c['x_label']}",
+            "x_label": c["x_label"],
+            "y_label": c["y_label"],
+            "traces": js_traces,
+        })
+
+    import json as _json
+    charts_json = _json.dumps(js_charts)
+
+    run_count = len(runs)
+    strategies_str = ", ".join(strategies) if strategies else "—"
+
+    html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>DQN Training Dashboard</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<title>RL Run Visualizer</title>
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
+  /* ── Reset & base ─────────────────────────────────────────────────── */
+  *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
 
-  :root {
-    --bg:       #0d0f14;
-    --surface:  #141720;
-    --border:   #252a38;
-    --text:     #c9d1e0;
-    --muted:    #515a72;
-    --accent1:  #4af0a8;   /* reward  */
-    --accent2:  #5b9cf6;   /* epsilon */
-    --accent3:  #f6a45b;   /* td      */
-    --accent4:  #e05bf6;   /* q_diff  */
-    --accent5:  #f6f05b;   /* ep_len  */
-  }
+  :root {{
+    --bg:        #0d0f12;
+    --surface:   #141720;
+    --border:    #222631;
+    --text:      #d4d8e2;
+    --muted:     #5a6072;
+    --accent:    #2196f3;
+    --mono:      "JetBrains Mono", "Fira Mono", monospace;
+    --sans:      "IBM Plex Sans", "Inter", sans-serif;
+  }}
 
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
-  body {
+  html {{ scroll-behavior: smooth; }}
+  body {{
     background: var(--bg);
     color: var(--text);
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-weight: 300;
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.6;
     min-height: 100vh;
-    padding: 2rem 2.5rem 4rem;
-  }
+  }}
 
-  header {
-    display: flex;
-    align-items: baseline;
-    gap: 1.5rem;
-    margin-bottom: 2.5rem;
+  /* ── Header ───────────────────────────────────────────────────────── */
+  header {{
     border-bottom: 1px solid var(--border);
-    padding-bottom: 1.25rem;
-  }
-  header h1 {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 1.1rem;
-    font-weight: 600;
-    letter-spacing: .08em;
-    color: var(--accent1);
-  }
-  header span {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: .75rem;
+    padding: 32px 48px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }}
+  header h1 {{
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }}
+  header p {{
+    font-size: 12px;
     color: var(--muted);
-  }
+    font-family: var(--mono);
+  }}
+  .meta-pills {{
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+  }}
+  .pill {{
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 2px 8px;
+  }}
+  .pill span {{ color: var(--text); }}
 
-  .stats-row {
+  /* ── Legend ───────────────────────────────────────────────────────── */
+  .legend-bar {{
+    padding: 14px 48px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    align-items: center;
+  }}
+  .legend-item {{
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }}
+  .legend-dot {{
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }}
+
+  /* ── Grid ─────────────────────────────────────────────────────────── */
+  main {{
+    padding: 32px 48px 64px;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 1rem;
-    margin-bottom: 2.5rem;
-  }
-  .stat-card {
+    grid-template-columns: repeat(auto-fill, minmax(520px, 1fr));
+    gap: 24px;
+  }}
+
+  .chart-card {{
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 6px;
-    padding: 1rem 1.25rem;
-  }
-  .stat-card .label {
-    font-size: .65rem;
-    letter-spacing: .12em;
-    text-transform: uppercase;
+    overflow: hidden;
+    transition: border-color .2s;
+  }}
+  .chart-card:hover {{ border-color: #2d3347; }}
+
+  .chart-header {{
+    padding: 14px 18px 10px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 11px;
     color: var(--muted);
-    margin-bottom: .4rem;
-    font-family: 'IBM Plex Mono', monospace;
-  }
-  .stat-card .value {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 1.45rem;
-    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }}
+  .chart-header strong {{
     color: var(--text);
-  }
-  .stat-card .value.accent1 { color: var(--accent1); }
-  .stat-card .value.accent2 { color: var(--accent2); }
-  .stat-card .value.accent3 { color: var(--accent3); }
-  .stat-card .value.accent4 { color: var(--accent4); }
+    font-weight: 500;
+  }}
 
-  .charts-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1.5rem;
-  }
-  @media (max-width: 900px) {
-    .charts-grid { grid-template-columns: 1fr; }
-  }
+  .chart-wrap {{ height: 280px; }}
 
-  .chart-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 1.25rem 1.5rem 1.5rem;
-  }
-  .chart-card.wide {
-    grid-column: 1 / -1;
-  }
-  .chart-title {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: .7rem;
-    letter-spacing: .12em;
-    text-transform: uppercase;
+  /* ── Footer ───────────────────────────────────────────────────────── */
+  footer {{
+    border-top: 1px solid var(--border);
+    padding: 20px 48px;
+    font-family: var(--mono);
+    font-size: 11px;
     color: var(--muted);
-    margin-bottom: 1rem;
-  }
-  .chart-wrap {
-    position: relative;
-    height: 220px;
-  }
-  .chart-wrap.tall {
-    height: 260px;
-  }
+  }}
 </style>
 </head>
 <body>
 
 <header>
-  <h1>DQN · TRAINING LOG</h1>
-  <span id="logpath">__LOG_PATH__</span>
+  <h1>RL Run Visualizer</h1>
+  <p>{source_dir}</p>
+  <div class="meta-pills">
+    <div class="pill">runs&nbsp;<span>{run_count}</span></div>
+    <div class="pill">strategies&nbsp;<span>{strategies_str}</span></div>
+  </div>
 </header>
 
-<div class="stats-row" id="statsRow"></div>
+<div class="legend-bar" id="legend"></div>
 
-<div class="charts-grid">
-  <div class="chart-card wide">
-    <div class="chart-title">Episode Reward</div>
-    <div class="chart-wrap tall"><canvas id="cReward"></canvas></div>
-  </div>
-  <div class="chart-card">
-    <div class="chart-title">|TD Error|</div>
-    <div class="chart-wrap"><canvas id="cTD"></canvas></div>
-  </div>
-  <div class="chart-card">
-    <div class="chart-title">Q<sub>max</sub> − Q<sub>taken</sub></div>
-    <div class="chart-wrap"><canvas id="cQDiff"></canvas></div>
-  </div>
-  <div class="chart-card">
-    <div class="chart-title">Epsilon (ε)</div>
-    <div class="chart-wrap"><canvas id="cEpsilon"></canvas></div>
-  </div>
-  <div class="chart-card">
-    <div class="chart-title">Episode Length</div>
-    <div class="chart-wrap"><canvas id="cEpLen"></canvas></div>
-  </div>
-</div>
+<main id="charts"></main>
+
+<footer>generated by visualize.py</footer>
 
 <script>
-// ── data injected by Python ──────────────────────────────────────────────────
-const episodes  = __EPISODES__;
-const rewards   = __REWARDS__;
-const td        = __TD__;
-const qdiff     = __QDIFF__;
-const epsilon   = __EPSILON__;
-const eplen     = __EPLEN__;
-const steps     = __STEPS__;
-const rollReward = __ROLL_REWARD__;
-const WINDOW    = __WINDOW__;
+const CHARTS = {charts_json};
 
-// ── summary stats ────────────────────────────────────────────────────────────
-const validRewards  = rewards.filter(v => v !== null);
-const validTD       = td.filter(v => v !== null);
-const validQDiff    = qdiff.filter(v => v !== null);
+const PALETTE = {_json.dumps(PALETTE)};
+const STRATEGIES = {_json.dumps(strategies)};
+const COLOR_MAP = Object.fromEntries(STRATEGIES.map((s,i) => [s, PALETTE[i % PALETTE.length]]));
 
-function fmt(v, dec=3) {
-  if (v === null || v === undefined) return "—";
-  return typeof v === 'number' ? v.toFixed(dec) : v;
-}
+// Build legend
+const legend = document.getElementById('legend');
+STRATEGIES.forEach(s => {{
+  const el = document.createElement('div');
+  el.className = 'legend-item';
+  el.innerHTML = `<div class="legend-dot" style="background:${{COLOR_MAP[s]}}"></div>${{s}}`;
+  legend.appendChild(el);
+}});
 
-const statsRow = document.getElementById("statsRow");
-const stats = [
-  { label: "Episodes",      value: episodes.length,                      cls: ""        },
-  { label: "Total Steps",   value: (steps[steps.length-1]||0).toLocaleString(), cls: "" },
-  { label: "Mean Reward",   value: fmt(validRewards.reduce((a,b)=>a+b,0)/validRewards.length, 2), cls: "accent1" },
-  { label: "Max Reward",    value: fmt(Math.max(...validRewards), 2),     cls: "accent1" },
-  { label: "Mean |TD|",     value: fmt(validTD.reduce((a,b)=>a+b,0)/Math.max(validTD.length,1), 4), cls: "accent3" },
-  { label: "Mean Q diff",   value: fmt(validQDiff.reduce((a,b)=>a+b,0)/Math.max(validQDiff.length,1), 4), cls: "accent4" },
-  { label: "Final ε",       value: fmt(epsilon[epsilon.length-1], 4),    cls: "accent2" },
-];
-stats.forEach(s => {
-  statsRow.innerHTML += `
-    <div class="stat-card">
-      <div class="label">${s.label}</div>
-      <div class="value ${s.cls}">${s.value}</div>
-    </div>`;
-});
+// Plotly layout base
+function makeLayout(xLabel, yLabel) {{
+  return {{
+    margin: {{ t: 16, r: 20, b: 44, l: 58 }},
+    paper_bgcolor: 'transparent',
+    plot_bgcolor: 'transparent',
+    font: {{ family: "'IBM Plex Mono', monospace", size: 11, color: '#5a6072' }},
+    xaxis: {{
+      title: {{ text: xLabel, standoff: 8 }},
+      gridcolor: '#1c2030',
+      linecolor: '#222631',
+      tickcolor: '#222631',
+      zeroline: false,
+    }},
+    yaxis: {{
+      title: {{ text: yLabel, standoff: 8 }},
+      gridcolor: '#1c2030',
+      linecolor: '#222631',
+      tickcolor: '#222631',
+      zeroline: false,
+    }},
+    legend: {{ visible: false }},
+    hovermode: 'x unified',
+    hoverlabel: {{
+      bgcolor: '#141720',
+      bordercolor: '#2d3347',
+      font: {{ family: "'IBM Plex Mono', monospace", size: 11 }},
+    }},
+  }};
+}}
 
-// ── chart defaults ───────────────────────────────────────────────────────────
-Chart.defaults.color = "#515a72";
-Chart.defaults.font.family = "'IBM Plex Mono', monospace";
-Chart.defaults.font.size = 10;
+const config = {{
+  displayModeBar: true,
+  modeBarButtonsToRemove: ['select2d','lasso2d','autoScale2d'],
+  displaylogo: false,
+  responsive: true,
+}};
 
-const gridColor = "#1e2333";
-const tickColor = "#515a72";
-
-function baseOpts(yLabel="") {
-  return {
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: { duration: 400 },
-    plugins: {
-      legend: { display: true, labels: { boxWidth: 10, padding: 12 } },
-      tooltip: { mode: "index", intersect: false },
-    },
-    scales: {
-      x: {
-        ticks: { color: tickColor, maxTicksLimit: 8 },
-        grid:  { color: gridColor },
-        title: { display: false },
-      },
-      y: {
-        ticks: { color: tickColor, maxTicksLimit: 6 },
-        grid:  { color: gridColor },
-        title: { display: !!yLabel, text: yLabel, color: tickColor },
-      },
-    },
-  };
-}
-
-function makeLine(id, datasets, opts={}) {
-  return new Chart(document.getElementById(id), {
-    type: "line",
-    data: { labels: episodes, datasets },
-    options: { ...baseOpts(), ...opts },
-  });
-}
-
-function dataset(label, data, color, opts={}) {
-  return {
-    label,
-    data,
-    borderColor: color,
-    backgroundColor: color + "18",
-    borderWidth: 1.5,
-    pointRadius: 0,
-    tension: 0.3,
-    fill: false,
-    spanGaps: true,
-    ...opts,
-  };
-}
-
-// ── reward ───────────────────────────────────────────────────────────────────
-makeLine("cReward", [
-  dataset("raw",  rewards,   "var(--accent1)", { borderWidth: 1, opacity: 0.4 }),
-  dataset(`roll-${WINDOW}`, rollReward, "var(--accent1)", { borderWidth: 2.5 }),
-]);
-
-// ── td ───────────────────────────────────────────────────────────────────────
-makeLine("cTD", [
-  dataset("|TD|", td, "var(--accent3)"),
-]);
-
-// ── q_diff ───────────────────────────────────────────────────────────────────
-makeLine("cQDiff", [
-  dataset("Qmax−Qtaken", qdiff, "var(--accent4)"),
-]);
-
-// ── epsilon ──────────────────────────────────────────────────────────────────
-makeLine("cEpsilon", [
-  dataset("ε", epsilon, "var(--accent2)"),
-]);
-
-// ── ep_len ───────────────────────────────────────────────────────────────────
-makeLine("cEpLen", [
-  dataset("ep_len", eplen, "var(--accent5)"),
-]);
+// Render charts
+const main = document.getElementById('charts');
+CHARTS.forEach(c => {{
+  const card = document.createElement('div');
+  card.className = 'chart-card';
+  card.innerHTML = `
+    <div class="chart-header"><strong>${{c.title}}</strong></div>
+    <div class="chart-wrap" id="${{c.id}}"></div>
+  `;
+  main.appendChild(card);
+  Plotly.newPlot(c.id, c.traces, makeLayout(c.x_label, c.y_label), config);
+}});
 </script>
 </body>
-</html>
-"""
-
-
-def build_html(episodes: list[dict], summary: dict | None, log_path: str, window: int = 50) -> str:
-    eps_idx  = [r["episode"] for r in episodes]
-    rewards  = safe(episodes, "reward")
-    td       = safe(episodes, "td")
-    qdiff    = safe(episodes, "q_diff")
-    epsilon  = safe(episodes, "epsilon")
-    eplen    = safe(episodes, "ep_len")
-    steps    = safe(episodes, "total_steps")
-
-    # rolling mean over rewards (skip None)
-    reward_vals = [r if r is not None else float("nan") for r in rewards]
-    roll = rolling_mean(reward_vals, window)
-
-    html = HTML_TEMPLATE
-    html = html.replace("__LOG_PATH__", log_path)
-    html = html.replace("__EPISODES__",   to_js_array(eps_idx))
-    html = html.replace("__REWARDS__",    to_js_array(rewards))
-    html = html.replace("__TD__",         to_js_array(td))
-    html = html.replace("__QDIFF__",      to_js_array(qdiff))
-    html = html.replace("__EPSILON__",    to_js_array(epsilon))
-    html = html.replace("__EPLEN__",      to_js_array(eplen))
-    html = html.replace("__STEPS__",      to_js_array(steps))
-    html = html.replace("__ROLL_REWARD__",to_js_array(roll))
-    html = html.replace("__WINDOW__",     str(window))
+</html>"""
     return html
 
 
-# ── CLI ───────────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser(description="Visualize a DQN JSONL training log.")
-    parser.add_argument("--log",    required=True, help="Path to the .jsonl log file")
-    parser.add_argument("--out",    default=None,  help="Output HTML path (default: <log>.html)")
-    parser.add_argument("--window", type=int, default=50, help="Rolling average window (default: 50)")
-    parser.add_argument("--no-open", action="store_true", help="Don't auto-open the browser")
+    parser = argparse.ArgumentParser(description="Visualize RL run logs from a directory of .jsonl files.")
+    parser.add_argument("--dir", required=True, help="Directory containing .jsonl run logs")
+    parser.add_argument("--output", default="runs_viz.html", help="Output HTML file (default: runs_viz.html)")
     args = parser.parse_args()
 
-    log_path = args.log
-    out_path = args.out or str(Path(log_path).with_suffix(".html"))
+    if not os.path.isdir(args.dir):
+        print(f"Error: '{args.dir}' is not a directory.", file=sys.stderr)
+        sys.exit(1)
 
-    print(f"Loading {log_path} …")
-    episodes, summary = load_log(log_path)
-    print(f"  {len(episodes)} episode records loaded")
-    if summary:
-        print(f"  Summary record found: {summary}")
+    print(f"Scanning {args.dir} …")
+    runs = collect_runs(args.dir)
+    print(f"  Found {len(runs)} run(s): {[f'{s}(seed={sd})' for (s,sd) in runs]}")
 
-    html = build_html(episodes, summary, log_path, window=args.window)
+    charts = build_chart_data(runs)
+    print(f"  Built {len(charts)} chart(s): {[c['y_key']+' vs '+c['x_key'] for c in charts]}")
 
+    html = generate_html(runs, charts, os.path.abspath(args.dir))
+
+    out_path = args.output
     with open(out_path, "w") as f:
         f.write(html)
-    print(f"Dashboard → {out_path}")
 
-    if not args.no_open:
-        webbrowser.open(f"file://{os.path.abspath(out_path)}")
+    print(f"  Saved → {os.path.abspath(out_path)}")
 
 
 if __name__ == "__main__":

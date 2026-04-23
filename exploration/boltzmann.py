@@ -96,6 +96,21 @@ class BoltzmannAgent:
         self.optimizer.step()
         self.total_grad_steps += 1
 
+        with torch.no_grad():
+            all_q = self.q_network(states)
+            q_max = all_q.max(dim=1, keepdim=True).values
+            q_taken = all_q.gather(1, actions)
+            regret = (q_max - q_taken).mean().item()
+            probs = torch.softmax(all_q, dim=1)
+            log_probs = torch.log(probs + 1e-8)
+            entropy = -(probs * log_probs).sum(dim=1).mean().item()
+
+        return {
+            "loss": loss.item(),
+            "regret": regret,
+            "entropy": entropy,
+        }
+
     def _sync_target(self) -> None:
         self.target_network.load_state_dict(self.q_network.state_dict())
 
@@ -120,6 +135,10 @@ class BoltzmannAgent:
             ep_len         = 0
             curr_lives     = info.get("lives", 5)
             life_lost      = False
+            
+            ep_losses: list[float] = []
+            ep_regrets: list[float] = []
+            ep_entropies: list[float] = []
 
             while ep_len <= self.hp.MAX_EPISODE_LENGTH:
                 if life_lost or ep_len == 0:
@@ -158,6 +177,12 @@ class BoltzmannAgent:
                         )
                     state_stack = next_state_stack
                     continue
+                
+                if self.total_env_steps % self.hp.UPDATE_FREQ == 0:
+                    metrics = self._train_step()
+                    ep_losses.append(metrics["loss"])
+                    ep_regrets.append(metrics["regret"])
+                    ep_entropies.append(metrics["entropy"])
 
                 idx = min(self.total_env_steps, self.explore_hp.TEMP_DECAY_STEPS - 1)
                 self.temperature = float(self._temp_schedule[idx])
@@ -205,8 +230,7 @@ class BoltzmannAgent:
         print(f"\nTraining complete. Log → {log_path}  |  Model → {final_model}")
 
     def _model_stem(self) -> str:
-        env_slug = self.env_id.replace("/", "-").replace(" ", "_")
-        return f"dqn_{env_slug}_{self.STRATEGY_NAME}"
+        return f"{self.STRATEGY_NAME}_{self.hp.SEED}_{self.hp.NUM_EPISODES}"
     
     def evaluate(self, env, num_episodes: int = 1, record: bool = False) -> dict:
         frame_stack = FrameStack(self.hp.FRAME_STACK)
