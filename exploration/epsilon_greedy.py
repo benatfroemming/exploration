@@ -116,16 +116,15 @@ class EpsilonGreedyAgent:
         with torch.no_grad():
             all_q = self.q_network(states)
             q_max = all_q.max(dim=1, keepdim=True).values
-            q_min = all_q.min(dim=1, keepdim=True).values
             q_taken = all_q.gather(1, actions)
-            
-            eps = 1e-8
-            q_diff = (q_max - q_taken) / (q_max - q_min + eps)
-            td_errors = (targets - q_values).abs()
+            regret = (q_max - q_taken).mean().item()
+            probs = torch.softmax(all_q, dim=1)
+            log_probs = torch.log(probs + 1e-8)
+            entropy = -(probs * log_probs).sum(dim=1).mean().item()
 
         return {
-            "mean_abs_td": td_errors.mean().item(),
-            "mean_q_diff": q_diff.mean().item(),
+            "regret": regret,
+            "entropy": entropy,
         }
 
     # Target network sync
@@ -167,9 +166,9 @@ class EpsilonGreedyAgent:
             ep_len = 0
             curr_lives = info.get("lives", 5)
             life_lost = False
-            
-            ep_td_errors: list[float] = []
-            ep_q_diffs: list[float] = []
+
+            ep_regrets: list[float] = []
+            ep_entropies: list[float] = []
 
             while ep_len <= self.hp.MAX_EPISODE_LENGTH:
                 # Fire after a life loss or at the episode start
@@ -222,8 +221,8 @@ class EpsilonGreedyAgent:
 
                 if self.total_env_steps % self.hp.UPDATE_FREQ == 0:
                     metrics = self._train_step()
-                    ep_td_errors.append(metrics["mean_abs_td"])
-                    ep_q_diffs.append(metrics["mean_q_diff"])
+                    ep_regrets.append(metrics["regret"])
+                    ep_entropies.append(metrics["entropy"])
                     idx = min(self.total_env_steps, self.explore_hp.EPSILON_DECAY_STEPS - 1)
                     self.epsilon = float(self._epsilon_schedule[idx])
 
@@ -246,8 +245,8 @@ class EpsilonGreedyAgent:
                 "reward": episode_reward,
                 "ep_len": ep_len,
                 "epsilon": round(self.epsilon, 6),
-                "q_diff": float(np.mean(ep_q_diffs)) if ep_q_diffs else None,
-                "td": float(np.mean(ep_td_errors)) if ep_td_errors else None,
+                "regret": float(np.mean(ep_regrets)) if ep_regrets else None,
+                "entropy": float(np.mean(ep_entropies)) if ep_entropies else None,
             }
             log_file.write(json.dumps(record) + "\n")
             log_file.flush()
