@@ -114,14 +114,18 @@ class EpsilonGreedyAgent:
         self.total_grad_steps += 1
 
         with torch.no_grad():
-            all_q = self.q_network(states)                          # (B, A)
-            q_max = all_q.max(dim=1, keepdim=True).values           # (B, 1)
-            q_taken = all_q.gather(1, actions)                      # (B, 1)
-            td_errors = (targets - q_values).abs()                  # (B, 1)
+            all_q = self.q_network(states)
+            q_max = all_q.max(dim=1, keepdim=True).values
+            q_min = all_q.min(dim=1, keepdim=True).values
+            q_taken = all_q.gather(1, actions)
+            
+            eps = 1e-8
+            q_diff = (q_max - q_taken) / (q_max - q_min + eps)
+            td_errors = (targets - q_values).abs()
 
         return {
             "mean_abs_td": td_errors.mean().item(),
-            "mean_q_diff": (q_max - q_taken).mean().item(),
+            "mean_q_diff": q_diff.mean().item(),
         }
 
     # Target network sync
