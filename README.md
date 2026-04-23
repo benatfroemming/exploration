@@ -26,7 +26,7 @@ pip install -r requirements.txt
 - `rnd` — Adds intrinsic curiosity to the rewards for novel states via predicting a fixed random network's output.
 
 ```bash
-# Defaults: 5000 episodes, epsilon greedy, ALE/Breakout-v5
+# Defaults: 5000 episodes, epsilon greedy, ALE/Breakout-v5, 42
 python train.py
 
 # Custom
@@ -34,6 +34,9 @@ python train.py --episodes 10000 --strategy boltzmann --env ALE/Pong-v5
 
 # Resume from checkpoint
 python train.py --checkpoint runs/.../dqn_ALE-Breakout-v5_epsilon_greedy_final.pth
+
+# Set a seed
+python train.py --seed 84
 ```
 
 ## Evaluation

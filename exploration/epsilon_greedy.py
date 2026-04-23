@@ -123,6 +123,7 @@ class EpsilonGreedyAgent:
             entropy = -(probs * log_probs).sum(dim=1).mean().item()
 
         return {
+            "loss": loss.item(),
             "regret": regret,
             "entropy": entropy,
         }

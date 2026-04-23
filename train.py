@@ -11,6 +11,8 @@ import torch
 import importlib
 from core import SharedHyperParams
 
+import random, numpy as np
+
 # available exploration strategies
 STRATEGIES: dict[str, str] = {
     "epsilon_greedy": "exploration.epsilon_greedy.EpsilonGreedyAgent",
@@ -67,12 +69,25 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Path to a .pth file to resume training from.",
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for reproducibility (default: 42).",
+    )
     return parser.parse_args()
 
+def set_seed(seed: int) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 def main() -> None:
     args = parse_args()
-
+    set_seed(args.seed) 
+    
     # device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device  : {device}")
@@ -89,6 +104,7 @@ def main() -> None:
     sys.path.insert(0, os.path.dirname(__file__))
     shared_hp = SharedHyperParams()
     shared_hp.NUM_EPISODES = args.episodes
+    shared_hp.SEED = args.seed
 
     # output paths
     run_dir = _make_run_dir(args.env, args.strategy)
@@ -106,6 +122,7 @@ def main() -> None:
         action_dim=action_dim,
         device=device,
         checkpoint=args.checkpoint,
+        seed=args.seed,
     )
 
     # train
