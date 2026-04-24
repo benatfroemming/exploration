@@ -47,6 +47,12 @@ def parse_args() -> argparse.Namespace:
         help="Number of training episodes (default: 5000).",
     )
     parser.add_argument(
+        "--steps",
+        type=int,
+        default=None,
+        help="Max total env steps. If set, training stops when reached (overrides --episodes if both given).",
+    )
+    parser.add_argument(
         "--strategy",
         type=str,
         default="epsilon_greedy",
@@ -101,10 +107,16 @@ def main() -> None:
     sys.path.insert(0, os.path.dirname(__file__))
     shared_hp = SharedHyperParams()
     shared_hp.NUM_EPISODES = args.episodes
+    shared_hp.MAX_STEPS = args.steps
     shared_hp.SEED = args.seed
 
     # output paths
-    stem = f"{args.strategy}_{args.seed}_{args.episodes}"
+    if args.steps:
+        stem = f"{args.strategy}_{args.seed}_s{args.steps}"
+        print(f"Steps: {args.steps}")
+    else:
+        stem = f"{args.strategy}_{args.seed}_{args.episodes}"
+        print(f"Episodes: {args.episodes}")
     run_dir = _make_run_dir(args.env, args.strategy, args.seed)
     log_path = os.path.join(run_dir, f"{stem}.jsonl")
     model_dir = run_dir
@@ -128,6 +140,7 @@ def main() -> None:
         num_episodes=args.episodes,
         log_path=log_path,
         model_dir=model_dir,
+        max_steps=args.steps,
     )
 
     env.close()

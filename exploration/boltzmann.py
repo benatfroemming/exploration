@@ -118,12 +118,17 @@ class BoltzmannAgent:
         torch.save(self.q_network.state_dict(), path)
         print(f"  [save] {path}")
 
-    def train(self, env, num_episodes: int, log_path: str, model_dir: str) -> None:
+    def train(self, env, num_episodes: int, log_path: str, model_dir: str, max_steps: int | None = None) -> None:
         os.makedirs(model_dir, exist_ok=True)
         frame_stack = FrameStack(self.hp.FRAME_STACK)
         log_file = open(log_path, "w")
 
         for episode in range(1, num_episodes + 1):
+            
+            if max_steps is not None and self.total_env_steps >= max_steps:
+                print(f"\n[stop] Step limit {max_steps:,} reached at episode {episode}.")
+                break
+    
             obs, info = env.reset()
             state = preprocess_frame(obs)
             frame_stack.reset()
@@ -201,6 +206,9 @@ class BoltzmannAgent:
 
                 if done or truncated:
                     break
+                
+                if max_steps is not None and self.total_env_steps >= max_steps:
+                    break
 
             record = {
                 "episode":     episode,
@@ -230,6 +238,8 @@ class BoltzmannAgent:
         print(f"\nTraining complete. Log → {log_path}  |  Model → {final_model}")
 
     def _model_stem(self) -> str:
+        if getattr(self.hp, 'MAX_STEPS', None):
+            return f"{self.STRATEGY_NAME}_{self.hp.SEED}_s{self.hp.MAX_STEPS}"
         return f"{self.STRATEGY_NAME}_{self.hp.SEED}_{self.hp.NUM_EPISODES}"
     
     def evaluate(self, env, num_episodes: int = 1, record: bool = False) -> dict:

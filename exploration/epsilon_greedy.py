@@ -138,7 +138,7 @@ class EpsilonGreedyAgent:
         print(f"  [save] {path}")
 
     # Training loop
-    def train(self, env, num_episodes: int, log_path: str, model_dir: str) -> None:
+    def train(self, env, num_episodes: int, log_path: str, model_dir: str, max_steps: int | None = None) -> None:
         """
         Full training loop.
 
@@ -155,6 +155,11 @@ class EpsilonGreedyAgent:
         log_file = open(log_path, "w")
 
         for episode in range(1, num_episodes + 1):
+            
+            if max_steps is not None and self.total_env_steps >= max_steps:
+                print(f"\n[stop] Step limit {max_steps:,} reached at episode {episode}.")
+                break
+    
             obs, info = env.reset()
             state = preprocess_frame(obs)
             frame_stack.reset()
@@ -239,6 +244,9 @@ class EpsilonGreedyAgent:
 
                 if done or truncated:
                     break
+                
+                if max_steps is not None and self.total_env_steps >= max_steps:
+                    break
 
             # Per-episode logging
             record = {
@@ -280,6 +288,8 @@ class EpsilonGreedyAgent:
 
     # Helpers
     def _model_stem(self) -> str:
+        if getattr(self.hp, 'MAX_STEPS', None):
+            return f"{self.STRATEGY_NAME}_{self.hp.SEED}_s{self.hp.MAX_STEPS}"
         return f"{self.STRATEGY_NAME}_{self.hp.SEED}_{self.hp.NUM_EPISODES}"
     
     def evaluate(self, env, num_episodes: int = 1, record: bool = False) -> dict:
