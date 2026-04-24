@@ -56,7 +56,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--env",
         type=str,
-        default="ALE/Breakout-v5",
+        # default="ALE/Breakout-v5",
+        default="ALE/MontezumaRevenge-v5",
         help='Gymnasium environment ID (default: "ALE/Breakout-v5").',
     )
     parser.add_argument(
