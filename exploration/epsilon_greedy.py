@@ -273,7 +273,7 @@ class EpsilonGreedyAgent:
                 self.save(ckpt)
 
         # End of training: always save final model
-        final_model = os.path.join(model_dir, f"{self._model_stem()}_final.pth")
+        final_model = os.path.join(model_dir, f"{self._model_stem()}.pth")
         self.save(final_model)
         log_file.close()
         print(f"\nTraining complete. Log → {log_path}  |  Model → {final_model}")

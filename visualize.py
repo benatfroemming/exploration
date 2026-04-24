@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
 """
 visualize.py — RL run log visualizer
-Usage: python visualize.py --dir <run_log_directory> [--output <output.html>]
+Usage: python visualize.py --dir <run_log_directory>
 
 Expects .jsonl files named like: {strategy}_{seed}_{episodes}.jsonl
 where strategy may itself contain underscores (e.g. epsilon_greedy).
+Output: runs_viz.html saved in the current working directory.
 """
 
 import argparse
 import json
 import os
-import re
 import sys
-from collections import defaultdict
 from pathlib import Path
 
 
@@ -54,10 +53,6 @@ def load_jsonl(path: str):
 
 
 def collect_runs(directory: str):
-    """
-    Returns a dict keyed by (strategy, seed) → list of records,
-    plus metadata.
-    """
     runs = {}
     dir_path = Path(directory)
     jsonl_files = sorted(dir_path.glob("*.jsonl"))
@@ -80,16 +75,16 @@ def collect_runs(directory: str):
 
 
 # ---------------------------------------------------------------------------
-# Data extraction helpers
+# Data extraction
 # ---------------------------------------------------------------------------
 
 METRICS = [
-    ("reward",     "episode",     "Reward",          "Episode"),
-    ("reward",     "total_steps", "Reward",          "Total Steps"),
-    ("ep_len",     "episode",     "Episode Length",  "Episode"),
-    ("loss",       "episode",     "Loss",            "Episode"),
-    ("regret",     "episode",     "Regret",          "Episode"),
-    ("entropy",    "episode",     "Entropy",         "Episode"),
+    ("reward",  "episode",     "Reward",         "Episode"),
+    ("reward",  "total_steps", "Reward",         "Total Steps"),
+    ("ep_len",  "episode",     "Episode Length", "Episode"),
+    ("loss",    "episode",     "Loss",           "Episode"),
+    ("regret",  "episode",     "Regret",         "Episode"),
+    ("entropy", "episode",     "Entropy",        "Episode"),
 ]
 
 
@@ -105,7 +100,6 @@ def extract_series(records, y_key, x_key):
 
 
 def build_chart_data(runs):
-    """Build per-metric chart data structures for Plotly."""
     charts = []
     for y_key, x_key, y_label, x_label in METRICS:
         traces = []
@@ -135,19 +129,18 @@ def build_chart_data(runs):
 # HTML generation
 # ---------------------------------------------------------------------------
 
+# Tableau-inspired palette — works well on both dark and light backgrounds
 PALETTE = [
-    "#2196f3", "#e91e63", "#4caf50", "#ff9800",
-    "#9c27b0", "#00bcd4", "#f44336", "#8bc34a",
-    "#ff5722", "#607d8b",
+    "#3b82f6", "#f43f5e", "#10b981", "#f59e0b",
+    "#a855f7", "#06b6d4", "#fb923c", "#84cc16",
+    "#ec4899", "#14b8a6",
 ]
 
 
-def generate_html(runs, charts, source_dir: str) -> str:
-    # Assign stable colors per strategy
+def generate_html(runs, charts) -> str:
     strategies = sorted({s for (s, _) in runs.keys()})
     color_map = {s: PALETTE[i % len(PALETTE)] for i, s in enumerate(strategies)}
 
-    # Serialise chart data as JS
     js_charts = []
     for c in charts:
         js_traces = []
@@ -157,249 +150,337 @@ def generate_html(runs, charts, source_dir: str) -> str:
                 "x": t["x"],
                 "y": t["y"],
                 "name": t["name"],
-                "type": "scatter",
-                "mode": "lines",
-                "line": {"color": color, "width": 1.8},
-                "hovertemplate": f"<b>{t['name']}</b><br>{c['x_label']}: %{{x}}<br>{c['y_label']}: %{{y:.4f}}<extra></extra>",
+                "strategy": t["strategy"],
+                "hovertemplate": (
+                    f"<b>{t['name']}</b><br>"
+                    f"{c['x_label']}: %{{x}}<br>"
+                    f"{c['y_label']}: %{{y:.4f}}<extra></extra>"
+                ),
             })
         js_charts.append({
             "id": f"chart_{c['y_key']}_{c['x_key']}",
-            "title": f"{c['y_label']} vs {c['x_label']}",
+            "title": f"{c['y_label']} / {c['x_label']}",
             "x_label": c["x_label"],
             "y_label": c["y_label"],
             "traces": js_traces,
         })
 
-    import json as _json
-    charts_json = _json.dumps(js_charts)
+    charts_json    = json.dumps(js_charts)
+    palette_json   = json.dumps(PALETTE)
+    strategies_json = json.dumps(strategies)
+    color_map_json = json.dumps(color_map)
 
-    run_count = len(runs)
-    strategies_str = ", ".join(strategies) if strategies else "—"
-
-    html = f"""<!DOCTYPE html>
-<html lang="en">
+    return f"""<!DOCTYPE html>
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>RL Run Visualizer</title>
+<title>Exploration Visualization</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
 <style>
-  /* ── Reset & base ─────────────────────────────────────────────────── */
-  *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+*, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
 
-  :root {{
-    --bg:        #0d0f12;
-    --surface:   #141720;
-    --border:    #222631;
-    --text:      #d4d8e2;
-    --muted:     #5a6072;
-    --accent:    #2196f3;
-    --mono:      "JetBrains Mono", "Fira Mono", monospace;
-    --sans:      "IBM Plex Sans", "Inter", sans-serif;
-  }}
+:root[data-theme="dark"] {{
+  --bg:      #111214;
+  --surface: #18191d;
+  --border:  #26282e;
+  --text:    #e2e4ea;
+  --sub:     #6b7080;
+  --grid:    #1d1f24;
+}}
+:root[data-theme="light"] {{
+  --bg:      #f5f5f7;
+  --surface: #ffffff;
+  --border:  #e0e1e6;
+  --text:    #1a1b1e;
+  --sub:     #8a8f9e;
+  --grid:    #eeeff2;
+}}
 
-  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500&family=IBM+Plex+Mono:wght@400;500&display=swap');
+html {{ scroll-behavior: smooth; }}
+body {{
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  min-height: 100vh;
+  transition: background .18s, color .18s;
+}}
 
-  html {{ scroll-behavior: smooth; }}
-  body {{
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--sans);
-    font-size: 14px;
-    line-height: 1.6;
-    min-height: 100vh;
-  }}
+/* ── Top bar ───────────────────────────────────────────── */
+.topbar {{
+  padding: 40px 52px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}}
+.topbar h1 {{
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -.02em;
+  color: var(--text);
+}}
 
-  /* ── Header ───────────────────────────────────────────────────────── */
-  header {{
-    border-bottom: 1px solid var(--border);
-    padding: 32px 48px 28px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }}
-  header h1 {{
-    font-family: var(--mono);
-    font-size: 13px;
-    font-weight: 500;
-    letter-spacing: .12em;
-    text-transform: uppercase;
-    color: var(--accent);
-  }}
-  header p {{
-    font-size: 12px;
-    color: var(--muted);
-    font-family: var(--mono);
-  }}
-  .meta-pills {{
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-top: 4px;
-  }}
-  .pill {{
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--muted);
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    padding: 2px 8px;
-  }}
-  .pill span {{ color: var(--text); }}
+/* ── Theme toggle ──────────────────────────────────────── */
+.toggle {{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}}
+.toggle-track {{
+  width: 34px; height: 18px;
+  background: var(--border);
+  border-radius: 9px;
+  position: relative;
+  transition: background .18s;
+}}
+.toggle-thumb {{
+  width: 12px; height: 12px;
+  background: var(--sub);
+  border-radius: 50%;
+  position: absolute;
+  top: 3px; left: 3px;
+  transition: transform .18s, background .18s;
+}}
+[data-theme="light"] .toggle-thumb {{
+  transform: translateX(16px);
+  background: var(--text);
+}}
+.toggle-lbl {{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--sub);
+  min-width: 28px;
+}}
 
-  /* ── Legend ───────────────────────────────────────────────────────── */
-  .legend-bar {{
-    padding: 14px 48px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    gap: 20px;
-    flex-wrap: wrap;
-    align-items: center;
-  }}
-  .legend-item {{
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--muted);
-  }}
-  .legend-dot {{
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }}
+/* ── Legend ────────────────────────────────────────────── */
+.legend {{
+  padding: 20px 52px 0;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}}
+.legend-item {{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--sub);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 10px;
+  transition: border-color .15s;
+}}
+.legend-item:hover {{ border-color: var(--sub); }}
+.legend-swatch {{
+  width: 12px; height: 3px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}}
 
-  /* ── Grid ─────────────────────────────────────────────────────────── */
-  main {{
-    padding: 32px 48px 64px;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(520px, 1fr));
-    gap: 24px;
-  }}
+/* ── Smoothing control ─────────────────────────────────── */
+.controls {{
+  padding: 16px 52px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}}
+.controls label {{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--sub);
+  letter-spacing: .04em;
+}}
+.controls input[type=range] {{
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100px; height: 2px;
+  background: var(--border);
+  border-radius: 1px;
+  outline: none;
+  cursor: pointer;
+}}
+.controls input[type=range]::-webkit-slider-thumb {{
+  -webkit-appearance: none;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--sub);
+  cursor: pointer;
+  transition: background .15s;
+}}
+.controls input[type=range]:hover::-webkit-slider-thumb {{ background: var(--text); }}
+.controls .val {{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text);
+  min-width: 24px;
+}}
 
-  .chart-card {{
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    overflow: hidden;
-    transition: border-color .2s;
-  }}
-  .chart-card:hover {{ border-color: #2d3347; }}
-
-  .chart-header {{
-    padding: 14px 18px 10px;
-    border-bottom: 1px solid var(--border);
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--muted);
-    letter-spacing: .06em;
-    text-transform: uppercase;
-  }}
-  .chart-header strong {{
-    color: var(--text);
-    font-weight: 500;
-  }}
-
-  .chart-wrap {{ height: 280px; }}
-
-  /* ── Footer ───────────────────────────────────────────────────────── */
-  footer {{
-    border-top: 1px solid var(--border);
-    padding: 20px 48px;
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--muted);
-  }}
+/* ── Chart grid ────────────────────────────────────────── */
+.grid {{
+  padding: 24px 52px 64px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+  gap: 18px;
+}}
+.card {{
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}}
+.card-title {{
+  padding: 11px 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--sub);
+  border-bottom: 1px solid var(--border);
+}}
+.chart-wrap {{ height: 250px; }}
 </style>
 </head>
 <body>
 
-<header>
-  <h1>RL Run Visualizer</h1>
-  <p>{source_dir}</p>
-  <div class="meta-pills">
-    <div class="pill">runs&nbsp;<span>{run_count}</span></div>
-    <div class="pill">strategies&nbsp;<span>{strategies_str}</span></div>
+<div class="topbar">
+  <h1>Exploration Visualization</h1>
+  <div class="toggle" id="themeToggle">
+    <div class="toggle-track"><div class="toggle-thumb"></div></div>
+    <span class="toggle-lbl" id="toggleLbl">light</span>
   </div>
-</header>
+</div>
 
-<div class="legend-bar" id="legend"></div>
+<div class="legend" id="legend"></div>
 
-<main id="charts"></main>
+<div class="controls">
+  <label for="smoothSlider">window avg</label>
+  <input type="range" id="smoothSlider" min="1" max="100" value="20" step="1"/>
+  <span class="val" id="smoothVal">20</span>
+</div>
 
-<footer>generated by visualize.py</footer>
+<div class="grid" id="charts"></div>
 
 <script>
-const CHARTS = {charts_json};
+const CHARTS     = {charts_json};
+const STRATEGIES = {strategies_json};
+const COLOR_MAP  = {color_map_json};
 
-const PALETTE = {_json.dumps(PALETTE)};
-const STRATEGIES = {_json.dumps(strategies)};
-const COLOR_MAP = Object.fromEntries(STRATEGIES.map((s,i) => [s, PALETTE[i % PALETTE.length]]));
+// ── Theme ──────────────────────────────────────────────
+const root      = document.documentElement;
+const toggleBtn = document.getElementById('themeToggle');
+const toggleLbl = document.getElementById('toggleLbl');
 
-// Build legend
-const legend = document.getElementById('legend');
+function setTheme(t) {{
+  root.setAttribute('data-theme', t);
+  toggleLbl.textContent = t === 'dark' ? 'light' : 'dark';
+  replotAll();
+}}
+toggleBtn.addEventListener('click', () => setTheme(root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'));
+
+function tv() {{
+  const s = getComputedStyle(root);
+  const g = k => s.getPropertyValue(k).trim();
+  return {{ surface: g('--surface'), grid: g('--grid'), border: g('--border'), sub: g('--sub'), text: g('--text') }};
+}}
+
+// ── Window average ──────────────────────────────────────
+function wavg(arr, w) {{
+  if (w <= 1) return arr;
+  const out = new Array(arr.length);
+  const half = Math.floor(w / 2);
+  for (let i = 0; i < arr.length; i++) {{
+    const a = Math.max(0, i - half);
+    const b = Math.min(arr.length, i + half + 1);
+    let s = 0; for (let j = a; j < b; j++) s += arr[j];
+    out[i] = s / (b - a);
+  }}
+  return out;
+}}
+
+let smoothW = 20;
+const slider   = document.getElementById('smoothSlider');
+const smoothEl = document.getElementById('smoothVal');
+slider.addEventListener('input', () => {{
+  smoothW = +slider.value;
+  smoothEl.textContent = smoothW;
+  replotAll();
+}});
+
+// ── Legend ──────────────────────────────────────────────
+const legendEl = document.getElementById('legend');
 STRATEGIES.forEach(s => {{
   const el = document.createElement('div');
   el.className = 'legend-item';
-  el.innerHTML = `<div class="legend-dot" style="background:${{COLOR_MAP[s]}}"></div>${{s}}`;
-  legend.appendChild(el);
+  el.innerHTML = `<div class="legend-swatch" style="background:${{COLOR_MAP[s]}}"></div>${{s.replace(/_/g,' ')}}`;
+  legendEl.appendChild(el);
 }});
 
-// Plotly layout base
-function makeLayout(xLabel, yLabel) {{
+// ── Layout ──────────────────────────────────────────────
+function layout(xLabel, yLabel) {{
+  const v = tv();
   return {{
-    margin: {{ t: 16, r: 20, b: 44, l: 58 }},
+    margin: {{ t: 10, r: 14, b: 42, l: 52 }},
     paper_bgcolor: 'transparent',
-    plot_bgcolor: 'transparent',
-    font: {{ family: "'IBM Plex Mono', monospace", size: 11, color: '#5a6072' }},
+    plot_bgcolor:  'transparent',
+    font: {{ family: "'JetBrains Mono', monospace", size: 9, color: v.sub }},
     xaxis: {{
-      title: {{ text: xLabel, standoff: 8 }},
-      gridcolor: '#1c2030',
-      linecolor: '#222631',
-      tickcolor: '#222631',
-      zeroline: false,
+      title: {{ text: xLabel, standoff: 5, font: {{ size: 9, color: v.sub }} }},
+      gridcolor: v.grid, linecolor: v.border, tickcolor: v.border,
+      tickfont: {{ size: 8 }}, zeroline: false,
     }},
     yaxis: {{
-      title: {{ text: yLabel, standoff: 8 }},
-      gridcolor: '#1c2030',
-      linecolor: '#222631',
-      tickcolor: '#222631',
-      zeroline: false,
+      title: {{ text: yLabel, standoff: 5, font: {{ size: 9, color: v.sub }} }},
+      gridcolor: v.grid, linecolor: v.border, tickcolor: v.border,
+      tickfont: {{ size: 8 }}, zeroline: false,
     }},
     legend: {{ visible: false }},
     hovermode: 'x unified',
     hoverlabel: {{
-      bgcolor: '#141720',
-      bordercolor: '#2d3347',
-      font: {{ family: "'IBM Plex Mono', monospace", size: 11 }},
+      bgcolor: v.surface, bordercolor: v.border,
+      font: {{ family: "'JetBrains Mono', monospace", size: 10 }},
     }},
   }};
 }}
 
-const config = {{
-  displayModeBar: true,
-  modeBarButtonsToRemove: ['select2d','lasso2d','autoScale2d'],
-  displaylogo: false,
-  responsive: true,
-}};
+const CFG = {{ displayModeBar: false, responsive: true }};
 
-// Render charts
-const main = document.getElementById('charts');
+// ── Render ──────────────────────────────────────────────
+const gridEl = document.getElementById('charts');
+
 CHARTS.forEach(c => {{
   const card = document.createElement('div');
-  card.className = 'chart-card';
-  card.innerHTML = `
-    <div class="chart-header"><strong>${{c.title}}</strong></div>
-    <div class="chart-wrap" id="${{c.id}}"></div>
-  `;
-  main.appendChild(card);
-  Plotly.newPlot(c.id, c.traces, makeLayout(c.x_label, c.y_label), config);
+  card.className = 'card';
+  card.innerHTML = `<div class="card-title">${{c.title}}</div><div class="chart-wrap" id="${{c.id}}"></div>`;
+  gridEl.appendChild(card);
+  Plotly.newPlot(c.id, makeTraces(c), layout(c.x_label, c.y_label), CFG);
 }});
+
+function makeTraces(c) {{
+  return c.traces.map(t => ({{
+    x: t.x,
+    y: wavg(t.y, smoothW),
+    name: t.name,
+    type: 'scatter', mode: 'lines',
+    line: {{ color: COLOR_MAP[t.strategy] || '#888', width: 1.6 }},
+    hovertemplate: t.hovertemplate,
+  }}));
+}}
+
+function replotAll() {{
+  CHARTS.forEach(c => Plotly.react(c.id, makeTraces(c), layout(c.x_label, c.y_label), CFG));
+}}
 </script>
 </body>
 </html>"""
-    return html
 
 
 # ---------------------------------------------------------------------------
@@ -407,9 +488,10 @@ CHARTS.forEach(c => {{
 # ---------------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser(description="Visualize RL run logs from a directory of .jsonl files.")
+    parser = argparse.ArgumentParser(
+        description="Visualize RL run logs from a directory of .jsonl files."
+    )
     parser.add_argument("--dir", required=True, help="Directory containing .jsonl run logs")
-    parser.add_argument("--output", default="runs_viz.html", help="Output HTML file (default: runs_viz.html)")
     args = parser.parse_args()
 
     if not os.path.isdir(args.dir):
@@ -418,14 +500,14 @@ def main():
 
     print(f"Scanning {args.dir} …")
     runs = collect_runs(args.dir)
-    print(f"  Found {len(runs)} run(s): {[f'{s}(seed={sd})' for (s,sd) in runs]}")
+    print(f"  Found {len(runs)} run(s): {[f'{s}(seed={sd})' for (s, sd) in runs]}")
 
     charts = build_chart_data(runs)
-    print(f"  Built {len(charts)} chart(s): {[c['y_key']+' vs '+c['x_key'] for c in charts]}")
+    print(f"  Built {len(charts)} chart(s): {[c['y_key'] + ' vs ' + c['x_key'] for c in charts]}")
 
-    html = generate_html(runs, charts, os.path.abspath(args.dir))
+    html = generate_html(runs, charts)
 
-    out_path = args.output
+    out_path = "runs_viz.html"
     with open(out_path, "w") as f:
         f.write(html)
 

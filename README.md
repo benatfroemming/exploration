@@ -72,7 +72,7 @@ python visualize.py --dir /content/runs
 ```
 Reads all `.jsonl` files in the directory, parses strategy names and seeds from filenames, and generates an interactive HTML report with six plots: reward vs episodes, reward vs steps, episode length, loss, regret, and entropy. Each strategy gets a distinct color; null metrics are skipped automatically.
 
-## Add a New Exploration Strategie
+## Add a New Exploration Strategy
 
 1) Create `exploration/your_strategy.py` following the `exploration/template.py`.
 2) Register it in the `STRATEGIES` dict in `train.py` and `eval.py`.
