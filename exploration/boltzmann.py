@@ -75,7 +75,8 @@ class BoltzmannAgent:
         with torch.no_grad():
             return self.q_network(state_tensor).argmax().item()
 
-    def _train_step(self) -> None:
+    def _train_step(self) -> dict:
+        # FIX: return type was annotated as None but returned a dict
         batch = self.replay_buffer.sample(self.hp.BATCH_SIZE)
         states, actions, rewards, next_states, dones = zip(*batch)
 
@@ -124,11 +125,11 @@ class BoltzmannAgent:
         log_file = open(log_path, "w")
 
         for episode in range(1, num_episodes + 1):
-            
+
             if max_steps is not None and self.total_env_steps >= max_steps:
                 print(f"\n[stop] Step limit {max_steps:,} reached at episode {episode}.")
                 break
-    
+
             obs, info = env.reset()
             state = preprocess_frame(obs)
             frame_stack.reset()
@@ -140,9 +141,9 @@ class BoltzmannAgent:
             ep_len         = 0
             curr_lives     = info.get("lives", 5)
             life_lost      = False
-            
-            ep_losses: list[float] = []
-            ep_regrets: list[float] = []
+
+            ep_losses:    list[float] = []
+            ep_regrets:   list[float] = []
             ep_entropies: list[float] = []
 
             while ep_len <= self.hp.MAX_EPISODE_LENGTH:
@@ -182,18 +183,15 @@ class BoltzmannAgent:
                         )
                     state_stack = next_state_stack
                     continue
-                
-                if self.total_env_steps % self.hp.UPDATE_FREQ == 0:
-                    metrics = self._train_step()
-                    ep_losses.append(metrics["loss"])
-                    ep_regrets.append(metrics["regret"])
-                    ep_entropies.append(metrics["entropy"])
 
                 idx = min(self.total_env_steps, self.explore_hp.TEMP_DECAY_STEPS - 1)
                 self.temperature = float(self._temp_schedule[idx])
 
                 if self.total_env_steps % self.hp.UPDATE_FREQ == 0:
-                    self._train_step()
+                    metrics = self._train_step()
+                    ep_losses.append(metrics["loss"])
+                    ep_regrets.append(metrics["regret"])
+                    ep_entropies.append(metrics["entropy"])
 
                 if self.total_env_steps % self.hp.TARGET_UPDATE == 0:
                     self._sync_target()
@@ -206,7 +204,7 @@ class BoltzmannAgent:
 
                 if done or truncated:
                     break
-                
+
                 if max_steps is not None and self.total_env_steps >= max_steps:
                     break
 
@@ -216,6 +214,9 @@ class BoltzmannAgent:
                 "reward":      episode_reward,
                 "ep_len":      ep_len,
                 "temperature": round(self.temperature, 6),
+                "mean_loss":    float(np.mean(ep_losses)) if ep_losses    else None,
+                "mean_regret":  float(np.mean(ep_regrets)) if ep_regrets   else None,
+                "mean_entropy": float(np.mean(ep_entropies)) if ep_entropies else None,
             }
             log_file.write(json.dumps(record) + "\n")
             log_file.flush()
@@ -226,7 +227,10 @@ class BoltzmannAgent:
                     f"steps={self.total_env_steps:>9,}  "
                     f"reward={episode_reward:>6.1f}  "
                     f"ep_len={ep_len:>6}  "
-                    f"T={self.temperature:.4f}"
+                    f"T={self.temperature:.4f}  "
+                    f"loss={record['mean_loss']}  "
+                    f"regret={record['mean_regret']}  "
+                    f"entropy={record['mean_entropy']}"
                 )
 
             if self.total_env_steps > 0 and self.total_env_steps % 2_000_000 == 0:
@@ -238,10 +242,11 @@ class BoltzmannAgent:
         print(f"\nTraining complete. Log → {log_path}  |  Model → {final_model}")
 
     def _model_stem(self) -> str:
-        if getattr(self.hp, 'MAX_STEPS', None):
-            return f"{self.STRATEGY_NAME}_{self.hp.SEED}_s{self.hp.MAX_STEPS}"
+        max_steps = getattr(self.hp, 'MAX_STEPS', None)
+        if max_steps is not None:
+            return f"{self.STRATEGY_NAME}_{self.hp.SEED}_s{max_steps}"
         return f"{self.STRATEGY_NAME}_{self.hp.SEED}_{self.hp.NUM_EPISODES}"
-    
+
     def evaluate(self, env, num_episodes: int = 1, record: bool = False) -> dict:
         frame_stack = FrameStack(self.hp.FRAME_STACK)
         rewards: list[float] = []
@@ -268,9 +273,10 @@ class BoltzmannAgent:
                 if record:
                     ep_frames.append(env.render())
 
-                state = frame_stack.get_stack().unsqueeze(0).float().div(255.0).to(self.device)
-                with torch.no_grad():
-                    action = self.q_network(state).argmax(dim=1).item() 
+                # FIX: use _greedy_action() for consistency rather than inlining
+                # the same logic (avoids silent divergence if _greedy_action changes).
+                state_tensor = frame_stack.get_stack().unsqueeze(0).float().div(255.0).to(self.device)
+                action = self._greedy_action(state_tensor)
 
                 obs, reward, terminated, truncated, _ = env.step(action)
                 total_reward += reward
