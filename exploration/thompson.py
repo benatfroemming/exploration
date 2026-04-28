@@ -247,7 +247,7 @@ class ThompsonAgent:
                 "regret":      float(np.mean(ep_regrets)) if ep_regrets else None,
                 "entropy":     float(np.mean(ep_entropies)) if ep_entropies else None,
             }
-            log_file.write(json.dumps(record) + "\\n")
+            log_file.write(json.dumps(record) + "\n")
             log_file.flush()
 
             if episode % 100 == 0:

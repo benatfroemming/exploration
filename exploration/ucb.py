@@ -249,7 +249,7 @@ class UCBAgent:
                 "last_bonus":  last_bonus,
             }
             
-            log_file.write(json.dumps(record) + "\\n")
+            log_file.write(json.dumps(record) + "\n")
             log_file.flush()
 
             if episode % 100 == 0:
