@@ -84,9 +84,10 @@ def collect_runs(directory: str):
 # Data extraction
 
 ALIASES = {
-    "loss": ["loss", "mean_loss"],
-    "regret": ["regret", "mean_regret"],
+    "loss":    ["loss", "mean_loss"],
+    "regret":  ["regret", "mean_regret"],
     "entropy": ["entropy", "mean_entropy"],
+    "ep_len":  ["ep_len", "episode_length", "steps"],
 }
 
 METRICS = [
@@ -94,20 +95,74 @@ METRICS = [
     ("reward",  "total_steps", "Reward",         "Total Steps"),
     ("ep_len",  "episode",     "Episode Length", "Episode"),
     ("loss",    "episode",     "Loss",           "Episode"),
+    ("loss",    "total_steps", "Loss",           "Total Steps"),
     ("regret",  "episode",     "Regret",         "Episode"),
+    ("regret",  "total_steps", "Regret",         "Total Steps"),
     ("entropy", "episode",     "Entropy",        "Episode"),
+    ("entropy", "total_steps", "Entropy",        "Total Steps"),
 ]
+
+EP_LEN_KEYS = ["ep_len", "episode_length", "steps", "length"]
+
+def _get_ep_len(record) -> int | None:
+    """Return the step count for a single episode record, or None."""
+    for k in EP_LEN_KEYS:
+        v = record.get(k)
+        if v is not None:
+            try:
+                return int(v)
+            except (TypeError, ValueError):
+                pass
+    return None
+
+
+def _build_cumulative_steps(records) -> list[int | None]:
+    """
+    Return a per-record list of cumulative total_steps computed from
+    episode lengths.  Entries are None when ep_len is unavailable.
+    Falls back to the record's own total_steps/step field if present.
+    """
+    cum = []
+    running = 0
+    for r in records:
+        # Prefer an explicit total_steps already in the record
+        explicit = r.get("total_steps") or r.get("step")
+        if explicit is not None:
+            try:
+                running = int(explicit)
+                cum.append(running)
+                continue
+            except (TypeError, ValueError):
+                pass
+        # Otherwise accumulate from ep_len
+        ep = _get_ep_len(r)
+        if ep is not None:
+            running += ep
+            cum.append(running)
+        else:
+            cum.append(None)
+    return cum
 
 
 def extract_series(records, y_key, x_key):
     xs, ys = [], []
-    keys = ALIASES.get(y_key, [y_key])
+    y_keys = ALIASES.get(y_key, [y_key])
 
-    for r in records:
-        x = r.get(x_key)
+    # Pre-compute cumulative steps once when needed
+    cum_steps = None
+    if x_key == "total_steps":
+        cum_steps = _build_cumulative_steps(records)
 
+    for idx, r in enumerate(records):
+        # --- X value ---
+        if x_key == "total_steps" and cum_steps is not None:
+            x = cum_steps[idx]
+        else:
+            x = r.get(x_key)
+
+        # --- Y value ---
         y = None
-        for k in keys:
+        for k in y_keys:
             if r.get(k) is not None:
                 y = r.get(k)
                 break
@@ -119,7 +174,7 @@ def extract_series(records, y_key, x_key):
             y = float(y)
         except (TypeError, ValueError):
             continue
-          
+
         xs.append(x)
         ys.append(y)
 
