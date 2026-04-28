@@ -91,18 +91,17 @@ ALIASES = {
 }
 
 METRICS = [
-    ("reward",  "episode",     "Reward",         "Episode"),
-    ("reward",  "total_steps", "Reward",         "Total Steps"),
-    ("ep_len",  "episode",     "Episode Length", "Episode"),
-    ("loss",    "episode",     "Loss",           "Episode"),
     ("loss",    "total_steps", "Loss",           "Total Steps"),
-    ("regret",  "episode",     "Regret",         "Episode"),
-    ("regret",  "total_steps", "Regret",         "Total Steps"),
-    ("entropy", "episode",     "Entropy",        "Episode"),
     ("entropy", "total_steps", "Entropy",        "Total Steps"),
+    ("regret",  "total_steps", "Regret",         "Total Steps"),
+    ("reward",  "episode",     "Reward",         "Episode"),
+    ("ep_len",  "episode",     "Episode Length", "Episode"),
+    ("reward",  "total_steps", "Reward",         "Total Steps"),
 ]
 
+# Keys tried (in order) to find an episode's step count for cumulative summation.
 EP_LEN_KEYS = ["ep_len", "episode_length", "steps", "length"]
+
 
 def _get_ep_len(record) -> int | None:
     """Return the step count for a single episode record, or None."""
