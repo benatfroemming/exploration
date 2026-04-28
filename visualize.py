@@ -83,12 +83,15 @@ def collect_runs(directory: str):
 
 # Data extraction
 METRICS = [
-    ("reward",  "episode",     "Reward",         "Episode"),
-    ("reward",  "total_steps", "Reward",         "Total Steps"),
-    ("ep_len",  "episode",     "Episode Length", "Episode"),
-    ("loss",    "episode",     "Loss",           "Episode"),
-    ("regret",  "episode",     "Regret",         "Episode"),
-    ("entropy", "episode",     "Entropy",        "Episode"),
+    ("reward",        "episode",     "Reward",           "Episode"),
+    ("reward",        "total_steps", "Reward",           "Total Steps"),
+    ("ep_len",        "episode",     "Episode Length",   "Episode"),
+    ("loss",          "episode",     "Loss",             "Episode"),
+    ("mean_loss",     "episode",     "Mean Loss",        "Episode"),
+    ("regret",        "episode",     "Regret",           "Episode"),
+    ("mean_regret",   "episode",     "Mean Regret",      "Episode"),
+    ("entropy",       "episode",     "Entropy",          "Episode"),
+    ("mean_entropy",  "episode",     "Mean Entropy",     "Episode"),
 ]
 
 
