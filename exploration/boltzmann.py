@@ -233,10 +233,7 @@ class BoltzmannAgent:
                     f"entropy={record['mean_entropy']}"
                 )
 
-            if self.total_env_steps > 0 and self.total_env_steps % 2_000_000 == 0:
-                self.save(os.path.join(model_dir, f"{self._model_stem()}_step{self.total_env_steps}.pth"))
-
-        final_model = os.path.join(model_dir, f"{self._model_stem()}_final.pth")
+        final_model = os.path.join(model_dir, f"{self._model_stem()}.pth")
         self.save(final_model)
         log_file.close()
         print(f"\nTraining complete. Log → {log_path}  |  Model → {final_model}")

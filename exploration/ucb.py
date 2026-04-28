@@ -261,7 +261,7 @@ class UCBAgent:
                     f"bonus={last_bonus:>7.4f}"
                 )
 
-        final_model = os.path.join(model_dir, f"{self._model_stem()}_final.pth")
+        final_model = os.path.join(model_dir, f"{self._model_stem()}.pth")
         self.save(final_model)
         log_file.close()
         print(f"Training complete. Log saved to: {log_path}")

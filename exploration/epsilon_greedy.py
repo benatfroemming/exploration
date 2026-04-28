@@ -272,14 +272,6 @@ class EpsilonGreedyAgent:
                     f"ε={self.epsilon:.4f}"
                 )
 
-            # Periodic checkpoint every 2 M steps
-            if self.total_env_steps > 0 and self.total_env_steps % 2_000_000 == 0:
-                ckpt = os.path.join(
-                    model_dir,
-                    f"{self._model_stem()}_step{self.total_env_steps}.pth",
-                )
-                self.save(ckpt)
-
         # End of training: always save final model
         final_model = os.path.join(model_dir, f"{self._model_stem()}.pth")
         self.save(final_model)
