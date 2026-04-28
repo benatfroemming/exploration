@@ -214,9 +214,9 @@ class BoltzmannAgent:
                 "reward":      episode_reward,
                 "ep_len":      ep_len,
                 "temperature": round(self.temperature, 6),
-                "mean_loss":    float(np.mean(ep_losses)) if ep_losses    else None,
-                "mean_regret":  float(np.mean(ep_regrets)) if ep_regrets   else None,
-                "mean_entropy": float(np.mean(ep_entropies)) if ep_entropies else None,
+                "loss":    float(np.mean(ep_losses)) if ep_losses    else None,
+                "regret":  float(np.mean(ep_regrets)) if ep_regrets   else None,
+                "entropy": float(np.mean(ep_entropies)) if ep_entropies else None,
             }
             log_file.write(json.dumps(record) + "\n")
             log_file.flush()
@@ -228,9 +228,6 @@ class BoltzmannAgent:
                     f"reward={episode_reward:>6.1f}  "
                     f"ep_len={ep_len:>6}  "
                     f"T={self.temperature:.4f}  "
-                    f"loss={record['mean_loss']}  "
-                    f"regret={record['mean_regret']}  "
-                    f"entropy={record['mean_entropy']}"
                 )
 
         final_model = os.path.join(model_dir, f"{self._model_stem()}.pth")
