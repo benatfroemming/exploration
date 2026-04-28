@@ -91,12 +91,12 @@ ALIASES = {
 }
 
 METRICS = [
+    ("reward",  "episode",     "Reward",         "Episode"),
+    ("reward",  "total_steps", "Reward",         "Total Steps"),
+    ("ep_len",  "episode",     "Episode Length", "Episode"),
     ("loss",    "total_steps", "Loss",           "Total Steps"),
     ("entropy", "total_steps", "Entropy",        "Total Steps"),
     ("regret",  "total_steps", "Regret",         "Total Steps"),
-    ("reward",  "episode",     "Reward",         "Episode"),
-    ("ep_len",  "episode",     "Episode Length", "Episode"),
-    ("reward",  "total_steps", "Reward",         "Total Steps"),
 ]
 
 # Keys tried (in order) to find an episode's step count for cumulative summation.
