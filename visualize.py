@@ -82,27 +82,47 @@ def collect_runs(directory: str):
     return runs
 
 # Data extraction
+
+ALIASES = {
+    "loss": ["loss", "mean_loss"],
+    "regret": ["regret", "mean_regret"],
+    "entropy": ["entropy", "mean_entropy"],
+}
+
 METRICS = [
-    ("reward",        "episode",     "Reward",           "Episode"),
-    ("reward",        "total_steps", "Reward",           "Total Steps"),
-    ("ep_len",        "episode",     "Episode Length",   "Episode"),
-    ("loss",          "episode",     "Loss",             "Episode"),
-    ("mean_loss",     "episode",     "Mean Loss",        "Episode"),
-    ("regret",        "episode",     "Regret",           "Episode"),
-    ("mean_regret",   "episode",     "Mean Regret",      "Episode"),
-    ("entropy",       "episode",     "Entropy",          "Episode"),
-    ("mean_entropy",  "episode",     "Mean Entropy",     "Episode"),
+    ("reward",  "episode",     "Reward",         "Episode"),
+    ("reward",  "total_steps", "Reward",         "Total Steps"),
+    ("ep_len",  "episode",     "Episode Length", "Episode"),
+    ("loss",    "episode",     "Loss",           "Episode"),
+    ("regret",  "episode",     "Regret",         "Episode"),
+    ("entropy", "episode",     "Entropy",        "Episode"),
 ]
 
 
 def extract_series(records, y_key, x_key):
     xs, ys = [], []
+    keys = ALIASES.get(y_key, [y_key])
+
     for r in records:
         x = r.get(x_key)
-        y = r.get(y_key)
-        if x is not None and y is not None:
-            xs.append(x)
-            ys.append(y)
+
+        y = None
+        for k in keys:
+            if r.get(k) is not None:
+                y = r.get(k)
+                break
+
+        if x is None or y is None:
+            continue
+
+        try:
+            y = float(y)
+        except (TypeError, ValueError):
+            continue
+          
+        xs.append(x)
+        ys.append(y)
+
     return xs, ys
 
 
