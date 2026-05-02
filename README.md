@@ -67,8 +67,8 @@ python eval.py --policy runs/.../model.pth --strategy thompson --render --episod
 Automatically parse and compare training runs across strategies and seeds.
 
 ```bash
-python visualize.py --dir /content/runs
-# outputs runs_viz.html
+python visualize.py --dir /content/runs --dir title
+# outputs title.html
 ```
 Reads all `.jsonl` files in the directory, parses strategy names and seeds from filenames, and generates an interactive HTML report with six plots: reward vs episodes, reward vs steps, episode length, loss, regret, and entropy. Each strategy gets a distinct color; null metrics are skipped automatically.
 

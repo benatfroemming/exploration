@@ -218,12 +218,12 @@ def build_chart_data(runs):
 # HTML generation
 PALETTE = [
     "#3b82f6", "#f43f5e", "#10b981", "#f59e0b",
-    "#a855f7", "#06b6d4", "#fb923c", "#84cc16",
-    "#ec4899", "#14b8a6",
+    "#a855f7", "#06b6d4", "#79ff20", "#ec4899",
+    "#6366f1", "#14b8a6", "#f97316", "#269d52",
 ]
 
 
-def generate_html(runs, charts) -> str:
+def generate_html(runs, charts, title: str = "Exploration Visualization") -> str:
     # One color per unique run (strategy+seed pair)
     color_map = {run["key"]: PALETTE[i % len(PALETTE)] for i, run in enumerate(runs)}
 
@@ -620,6 +620,8 @@ def main():
         description="Visualize RL run logs from a directory of .jsonl files."
     )
     parser.add_argument("--dir", required=True, help="Directory containing .jsonl run logs")
+    parser.add_argument("--title", default="Exploration Visualization",
+                    help="Title shown in the visualization and used as the output filename")
     args = parser.parse_args()
 
     if not os.path.isdir(args.dir):
@@ -635,9 +637,9 @@ def main():
     charts = build_chart_data(runs)
     print(f"  Built {len(charts)} chart(s): {[c['y_key'] + ' vs ' + c['x_key'] for c in charts]}")
 
-    html = generate_html(runs, charts)
-
-    out_path = "runs_viz.html"
+    html = generate_html(runs, charts, title=args.title)
+    safe_name = args.title.lower().replace(" ", "_")
+    out_path = f"{safe_name}.html"
     with open(out_path, "w") as f:
         f.write(html)
 
