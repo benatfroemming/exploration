@@ -272,7 +272,7 @@ def generate_html(runs, charts, title: str = "Exploration Visualization") -> str
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Exploration Visualization</title>
+<title>{title}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
@@ -461,7 +461,7 @@ body {{
 <body>
 
 <div class="topbar">
-  <h1>Exploration Visualization</h1>
+  <h1>{title}</h1>
   <div class="toggle" id="themeToggle">
     <div class="toggle-track"><div class="toggle-thumb"></div></div>
     <span class="toggle-lbl" id="toggleLbl">light</span>
