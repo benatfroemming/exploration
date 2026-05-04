@@ -287,6 +287,7 @@ class EpsilonGreedyAgent:
     def evaluate(self, env, num_episodes: int = 1, record: bool = False) -> dict:
         frame_stack = FrameStack(self.hp.FRAME_STACK)
         rewards: list[float] = []
+        steps: list[float] = []
         all_episodes_frames: list[list] = []
 
         self.q_network.eval()
@@ -305,6 +306,7 @@ class EpsilonGreedyAgent:
                 pass
 
             ep_frames: list = []
+            ep_steps = 0
             total_reward = 0.0
             for _ in range(self.hp.MAX_EPISODE_LENGTH):
                 if record:
@@ -312,34 +314,34 @@ class EpsilonGreedyAgent:
 
                 state = frame_stack.get_stack().unsqueeze(0).float().div(255.0).to(self.device)
                 with torch.no_grad():
-                    action = self.q_network(state).argmax(dim=1).item() 
+                    action = self.q_network(state).argmax(dim=1).item()
 
                 obs, reward, terminated, truncated, _ = env.step(action)
                 total_reward += reward
+                ep_steps += 1
                 frame_stack.append(preprocess_frame(obs))
 
                 if terminated or truncated:
                     break
 
             rewards.append(total_reward)
+            steps.append(ep_steps)
             if record:
                 all_episodes_frames.append(ep_frames)
 
         results = {
             "episodes": [
-                {"episode": ep, "total_reward": r}
-                for ep, r in enumerate(rewards, start=1)
+                {"episode": ep, "total_reward": r, "steps": s}
+                for ep, (r, s) in enumerate(zip(rewards, steps), start=1)
             ],
         }
 
         if num_episodes == 1:
             results["total_reward"] = rewards[0]
+            results["total_steps"] = steps[0]
         else:
             results["total_reward"] = sum(rewards)
-            results["mean"] = float(np.mean(rewards))
-            results["std"] = float(np.std(rewards))
-            results["min"] = float(min(rewards))
-            results["max"] = float(max(rewards))
+            results["total_steps"] = sum(steps)
 
         if all_episodes_frames:
             results["frames"] = all_episodes_frames

@@ -32,6 +32,9 @@ python train.py
 # Custom
 python train.py --episodes 10000 --strategy boltzmann --env ALE/Pong-v5
 
+# Limit by steps
+python train.py --steps 2000000 
+
 # Resume from checkpoint
 python train.py --checkpoint runs/.../dqn_ALE-Breakout-v5_epsilon_greedy_final.pth
 
@@ -39,11 +42,13 @@ python train.py --checkpoint runs/.../dqn_ALE-Breakout-v5_epsilon_greedy_final.p
 python train.py --seed 84
 ```
 
-When the training ends, it will store the model as a `.pth` file and a per episode log as a `.jsonl` with the following properties: episode, total_steps, reward, ep_len, loss, regret, and entropy.
+When the training ends, it will store the model weights in a `.pth` file and a per episode log as a `.jsonl` with the following properties: episode, total_steps, total reward, ep_len, agv. loss, avg. regret, and avg. entropy.
+
+> Note: Make sure to use GPU for training. We used the A100 from Colab Pro.
 
 ## Evaluation
 
-Runs a saved policy greedily for one or more episodes and reports the total reward.
+Runs a saved policy greedily for one or more episodes and reports the total reward and steps.
 
 ```bash
 # Required: --policy, --strategy
@@ -52,7 +57,7 @@ Runs a saved policy greedily for one or more episodes and reports the total rewa
 # Single episode
 python eval.py --policy runs/.../model.pth --strategy epsilon_greedy
 
-# Multiple episodes (also reports mean ± std and min/max)
+# Multiple episodes
 python eval.py --policy runs/.../model.pth --strategy boltzmann --episodes 10
 
 # Different environment
@@ -70,7 +75,7 @@ Automatically parse and compare training runs across strategies and seeds.
 python visualize.py --dir /content/runs --dir title
 # outputs title.html
 ```
-Reads all `.jsonl` files in the directory, parses strategy names and seeds from filenames, and generates an interactive HTML report with six plots: reward vs episodes, reward vs steps, episode length, loss, regret, and entropy. Each strategy gets a distinct color; null metrics are skipped automatically.
+Reads all `.jsonl` files in the directory, parses strategy names, seeds, and duration from filenames (e.g. epsilon_greedy_42_s2000000.jsonl), and generates an interactive HTML report with six plots: reward vs episodes, reward vs steps, episode length, loss, regret, and entropy. Each strategy gets a distinct color; null metrics are skipped automatically.
 
 ## Add a New Exploration Strategy
 
@@ -104,4 +109,4 @@ The components that don't change across exploration strategies, including the hy
 
 ## Experiments
 
-Results are in `results.ipynb` and the experimental data can be found in this Google Drive [folder](https://drive.google.com/drive/folders/1qRDPAOwVGfdGju1yAcFSOH2zjnah2NZe?usp=sharing).
+Results are in `results.ipynb` and the experimental data can be found in this Google Drive [folder](https://drive.google.com/drive/folders/1BJTQ3jsiRFt-GlhEtAF30-Bf0w87LEqW?usp=sharing).

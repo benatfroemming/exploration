@@ -58,11 +58,11 @@ def main() -> None:
         raise FileNotFoundError(f"Checkpoint not found: {args.policy}")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Device   : {device}")
-    print(f"Policy   : {args.policy}")
-    print(f"Env      : {args.env}")
-    print(f"Strategy : {args.strategy}")
-    print(f"Episodes : {args.episodes}\n")
+    print(f"Device: {device}")
+    print(f"Policy: {args.policy}")
+    print(f"Env: {args.env}")
+    print(f"Strategy: {args.strategy}")
+    print(f"Episodes: {args.episodes}\n")
 
     gym.register_envs(ale_py)
     env = gym.make(args.env, render_mode="rgb_array")
@@ -89,10 +89,8 @@ def main() -> None:
     if args.render and "frames" in results:
         _save_render(results["frames"], args.env)
     
-    print(f"Total reward : {results['total_reward']:.1f}")
-    if args.episodes > 1:
-        print(f"Average      : {results['mean']:.2f} ± {results['std']:.2f}")
-        print(f"Min / Max    : {results['min']:.1f} / {results['max']:.1f}")
+    print(f"Total reward: {results['total_reward']:.1f}")
+    print(f"Total steps: {results['total_steps']}")
 
 if __name__ == "__main__":
     sys.path.insert(0, os.path.dirname(__file__))
