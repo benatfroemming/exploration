@@ -1,14 +1,135 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Exploration in Reinforcement Learning</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      background-color: #f7f9fc;
+      color: #333;
+    }
+
+    header {
+      background-color: #1f2937;
+      color: white;
+      padding: 2rem;
+      text-align: center;
+    }
+
+    header h1 {
+      margin-bottom: 0.5rem;
+    }
+
+    main {
+      max-width: 900px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+    }
+
+    .section {
+      margin-bottom: 2.5rem;
+    }
+
+    .card {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+
+    .viz-list {
+      list-style: none;
+      padding: 0;
+    }
+
+    .viz-list li {
+      margin: 0.75rem 0;
+    }
+
+    .viz-list a {
+      display: block;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      text-decoration: none;
+      background-color: #e5e7eb;
+      color: #111827;
+      transition: all 0.2s ease;
+    }
+
+    .viz-list a:hover {
+      background-color: #3b82f6;
+      color: white;
+    }
+
+    .gif-container {
+      text-align: center;
+      margin-top: 1rem;
+    }
+
+    .gif-container img {
+      max-width: 100%;
+      border-radius: 5px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    footer {
+      text-align: center;
+      padding: 1.5rem;
+      color: #6b7280;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+
 <body>
-  <h1>Training Log Visualizations</h1>
-    <ul>
-    <li>
-      <a href="visualizations/breakout-v5.html" target="_blank" rel="noopener noreferrer">ALE/Breakout-v5</a>
-    </li>
-    <li>
-      <a href="visualizations/freeway-v5.html" target="_blank" rel="noopener noreferrer">ALE/Freeway-v5</a>
-    </li>
-  </ul>
+
+<header>
+  <h1>Exploration in Reinforcement Learning</h1>
+  <p>James Sargsyan, Beñat Froemming, Sergey Barabanoff</p>
+</header>
+
+<main>
+
+  <div class="section card">
+    <h2>Project Overview</h2>
+    <p>
+      This project is a modular <strong>PyTorch implementation of Deep Q-Network (DQN)</strong> 
+      for Atari environments using the 
+      <a href="https://ale.farama.org/environments/" target="_blank">Arcade Learning Environment (ALE)</a>.
+      It is based on the original DeepMind work 
+      (<a href="https://www.nature.com/articles/nature14236" target="_blank">Mnih et al., 2015</a>), 
+      with fixed DQN parameters to isolate and compare different <strong>exploration strategies</strong>.
+    </p>
+
+    <div class="gif-container">
+      <img src="./media/ALE_Breakout-v5_ep1.gif" alt="Breakout Gameplay">
+    </div>
+  </div>
+
+  <div class="section card">
+    <h2>Training Log Visualizations</h2>
+    <p>
+      Visualizations of the 24 training logs .
+    </p>
+
+    <ul class="viz-list">
+      <li>
+        <a href="visualizations/breakout-v5.html" target="_blank" rel="noopener noreferrer">
+          ALE/Breakout-v5
+        </a>
+      </li>
+      <li>
+        <a href="visualizations/freeway-v5.html" target="_blank" rel="noopener noreferrer">
+          ALE/Freeway-v5
+        </a>
+      </li>
+    </ul>
+  </div>
+
+</main>
 </body>
 </html>

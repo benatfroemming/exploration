@@ -109,4 +109,4 @@ The components that don't change across exploration strategies, including the hy
 
 ## Experiments
 
-Training weights and logs can be found in this Google Drive [folder](https://drive.google.com/drive/folders/1BJTQ3jsiRFt-GlhEtAF30-Bf0w87LEqW?usp=sharing). Evaluation results can be found in `evaluation.ipynb`.
+Training weights and logs can be found in this Google Drive [folder](https://drive.google.com/drive/folders/1BJTQ3jsiRFt-GlhEtAF30-Bf0w87LEqW?usp=sharing). Evaluation results can be found in `evaluation.ipynb`. Training log visualization outputs can be viewed on this repo's [GitHub pages](https://benatfroemming.github.io/exploration).
